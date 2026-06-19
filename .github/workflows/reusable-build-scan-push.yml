@@ -3,68 +3,76 @@ name: Reusable — Build, Scan & Push to ACR
 on:
   workflow_call:
     inputs:
-      service_name:
-        description: "Name of the service (used as Docker image name)"
+      image_name:
+        description: "Name of the Docker image"
         required: true
         type: string
-      docker_context:
-        description: "Docker build context directory"
-        required: false
-        default: "."
-        type: string
-      image_tag:
-        description: "Docker image tag (default: github.sha)"
-        required: false
-        default: "latest"
-        type: string
-      dockerfile:
+      dockerfile_path:
         description: "Path to Dockerfile"
         required: false
         default: "Dockerfile"
         type: string
-    secrets:
-      ACR_LOGIN_SERVER:
+      context_path:
+        description: "Docker build context directory"
+        required: false
+        default: "."
+        type: string
+      acr_login_server:
         description: "Azure Container Registry login server (e.g. resolveopsai.azurecr.io)"
         required: true
-      ACR_USERNAME:
-        description: "ACR username"
+        type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        description: "Azure Client ID for OIDC"
         required: true
-      ACR_PASSWORD:
-        description: "ACR password"
+      AZURE_TENANT_ID:
+        description: "Azure Tenant ID for OIDC"
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: "Azure Subscription ID for OIDC"
+        required: true
+      SNYK_TOKEN:
+        description: "Snyk token for image scanning"
         required: true
 
 jobs:
   build-scan-push:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Log in to Azure Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ inputs.docker_context }}
-          file: ${{ inputs.docker_context }}/${{ inputs.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.service_name }}:${{ inputs.image_tag }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ inputs.service_name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Image summary
         run: |
-          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
-          echo "**Service:** ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** ${{ secrets.ACR_LOGIN_SERVER }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ inputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          az acr login --name ${{ inputs.acr_login_server }}
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ github.sha }} \
+            -t ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:latest \
+            -f ${{ inputs.dockerfile_path }} \
+            ${{ inputs.context_path }}
+
+      - name: Scan Docker Image with Snyk
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ github.sha }}
+          args: --file=${{ inputs.dockerfile_path }} --severity-threshold=high
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ github.sha }}
+          docker push ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:latest
