@@ -55,3 +55,22 @@ Set these at: **GitHub Org → Settings → Secrets → Actions**
 All workflows use the `ACR_LOGIN_SERVER` secret — **never hardcode** the registry URL in any workflow file.
 
 This allows the org to migrate to a different ACR instance by updating a single secret.
+
+## CI/CD Pipeline Configuration
+
+This repository uses a central reusable workflow for continuous integration and delivery.
+
+### Required GitHub Secrets
+The following secrets must be configured in the GitHub repository settings (Settings > Secrets and variables > Actions):
+
+* SONAR_TOKEN: Token for SonarQube authentication
+* SONAR_HOST_URL: URL of the SonarQube server
+* SNYK_TOKEN: API token for Snyk vulnerability scanning
+* AZURE_CLIENT_ID: Azure Client ID for OIDC authentication
+* AZURE_TENANT_ID: Azure Tenant ID for OIDC authentication
+* AZURE_SUBSCRIPTION_ID: Azure Subscription ID for OIDC authentication
+
+### Required GitHub Variables
+The following variables must be configured (Settings > Secrets and variables > Actions > Variables):
+
+* ACR_LOGIN_SERVER: Azure Container Registry login server (e.g., esolveopsai.azurecr.io)
