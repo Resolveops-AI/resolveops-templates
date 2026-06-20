@@ -1,0 +1,60 @@
+name: Reusable — Snyk Scan
+
+on:
+  workflow_call:
+    inputs:
+      service_type:
+        description: "Type of service (node, python)"
+        required: true
+        type: string
+      severity_threshold:
+        description: "Snyk severity threshold (low, medium, high, critical)"
+        required: false
+        default: "high"
+        type: string
+    secrets:
+      SNYK_TOKEN:
+        description: "Snyk API Token"
+        required: true
+
+jobs:
+  snyk:
+    name: Snyk Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for Snyk
+        if: inputs.service_type == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python for Snyk
+        if: inputs.service_type == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Test Node
+        if: inputs.service_type == 'node'
+        run: |
+          npm install
+          snyk test --severity-threshold=${{ inputs.severity_threshold }}
+
+      - name: Snyk Test Python
+        if: inputs.service_type == 'python'
+        run: |
+          pip install -r requirements.txt
+          snyk test --severity-threshold=${{ inputs.severity_threshold }} --file=requirements.txt
+
+      - name: Snyk Test Fallback
+        if: inputs.service_type != 'node' && inputs.service_type != 'python'
+        run: snyk test --severity-threshold=${{ inputs.severity_threshold }}
