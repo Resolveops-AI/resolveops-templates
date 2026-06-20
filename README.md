@@ -17,7 +17,8 @@ This repository is part of a 3-repo architecture designed for maintainability an
 |---|---|---|
 | **Security Scan** | `reusable-security-scan.yml` | Centralized SonarQube, Snyk, and optional Trivy scanning. |
 | **Build & Push** | `reusable-docker-build-push.yml` | Standardized Docker build and push to Azure Container Registry (ACR) via OIDC. |
-| **Deploy to AKS** | `reusable-deploy-aks.yml` | Deploys Kustomize manifests to AKS via OIDC. |
+| **Deploy to AKS (Kustomize)** | `reusable-deploy-aks.yml` | Deploys Kustomize manifests to AKS via OIDC. |
+| **Deploy to AKS (Plain K8s)** | `reusable-kubernetes-deploy.yml` | Deploys plain Kubernetes manifests to AKS via OIDC (used for ResolveOps platform). |
 | **Notify** | `reusable-notify.yml` | Provides GitHub step summaries and optional webhook notifications. |
 
 ---
@@ -49,3 +50,21 @@ This repository is part of a 3-repo architecture designed for maintainability an
 - **Deployment Manifests**: Deploy workflows expect the application repository to provide the Kubernetes deployment manifests (via Kustomize).
 
 For detailed instructions on how to use these templates in your application repo, refer to the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).
+
+## Plain Kubernetes Deploy Example
+
+For deploying plain Kubernetes manifests (such as for the ResolveOps platform itself), you can use the `reusable-kubernetes-deploy.yml` template:
+
+```yaml
+deploy:
+  needs: build
+  uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-kubernetes-deploy.yml@main
+  secrets: inherit
+  with:
+    aks_resource_group: ${{ vars.RESOLVEOPS_AKS_RESOURCE_GROUP }}
+    aks_cluster_name: ${{ vars.RESOLVEOPS_AKS_NAME }}
+    namespace: ${{ vars.RESOLVEOPS_NAMESPACE }}
+    manifest_path: kubernetes
+    deployment_name: frontend
+    kubectl_timeout: 180s
+```
