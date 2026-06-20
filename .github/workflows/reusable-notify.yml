@@ -49,4 +49,4 @@ jobs:
               "status": "${{ inputs.status }}",
               "environment": "${{ inputs.environment }}",
               "run_url": "${{ inputs.run_url }}"
-            }' || echo "Failed to send webhook notification"
+            }'
