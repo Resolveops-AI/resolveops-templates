@@ -8,88 +8,111 @@ The `resolveops-templates` repository contains reusable GitHub Actions workflows
 - Consistent security scanning across all apps.
 - Enforced use of OIDC for Azure deployments (no more `KUBECONFIG_DATA` or long-lived secrets).
 - Clear separation between application code, CI/CD logic, and Infrastructure as Code.
+- Generic workflows that can be called for any application, like QuickHaul or ResolveOps Platform.
 
-## Workflow Example
+## QuickHaul Caller Workflow Example
 
-Below is a complete example of how `resolveops-application` might call these templates in its `.github/workflows/build-deploy.yml` pipeline.
+Below is a complete example of how `resolveops-application` might call these templates to build, scan, and deploy the QuickHaul service.
 
 ```yaml
-name: Build and Deploy Application
+name: QuickHaul CI/CD
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+    paths:
+      - 'sample-apps/quickhaul/**'
 
 jobs:
-  # 1. Block the pipeline if security scans fail
-  security-scan:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-security-scan.yml@main
-    with:
-      service_name: "resolveops-app"
-      service_type: "node" # or "python"
-      working_directory: "."
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-  # 2. Build and push image only if security scans passed
   build-push:
-    needs: security-scan
-    if: github.ref == 'refs/heads/main'
     uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
     with:
-      image_name: "resolveops-app"
-      acr_name: ${{ vars.ACR_NAME }}
-      acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      image_tag: ${{ github.sha }}
+      working-directory: "sample-apps/quickhaul"
+      image-name: "quickhaul-transits"
+      dockerfile-path: "Dockerfile"
+      context-path: "."
+      acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
+      environment: "dev"
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  # 3. Deploy to AKS
-  deploy-aks:
+  trivy-scan:
     needs: build-push
-    if: github.ref == 'refs/heads/main'
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-deploy-aks.yml@main
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-trivy-scan.yml@main
     with:
-      azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-      aks_cluster_name: ${{ vars.AKS_CLUSTER_NAME }}
-      namespace: ${{ vars.AKS_NAMESPACE }}
-      kustomize_path: "k8s/overlays/prod"
-      deployment_names: "resolveops-app-deployment"
+      image-name: "quickhaul-transits"
+      acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  # 4. Notify pipeline status
-  notify:
-    needs: [security-scan, build-push, deploy-aks]
-    if: always()
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-notify.yml@main
+  helm-validate:
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-validate.yml@main
     with:
-      service_name: "resolveops-app"
-      status: ${{ contains(needs.*.result, 'failure') && 'failure' || 'success' }}
-      run_url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      working-directory: "sample-apps/quickhaul/helm"
+      helm-chart-path: "quickhaul"
+      helm-values-file: "values.yaml"
+
+  deploy-dev:
+    needs: [trivy-scan, helm-validate]
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-deploy-aks.yml@main
+    with:
+      environment: "dev"
+      aks-resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
+      aks-cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+      namespace: "quickhaul-dev"
+      release-name: "quickhaul"
+      helm-chart-path: "sample-apps/quickhaul/helm/quickhaul"
+      helm-values-file: "values-dev.yaml"
+      image-name: "quickhaul-transits"
+      acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 ```
 
-## Debugging Guide
+## How to Deploy to Different Environments
 
-If your pipeline fails, follow these steps to troubleshoot:
+### `quickhaul-dev`
+- **Cluster**: `quickhaul-aks`
+- **Namespace**: `quickhaul-dev`
+- **Action**: Pass `environment: "dev"` and `namespace: "quickhaul-dev"` to the `reusable-helm-deploy-aks.yml` workflow.
 
-1. **Snyk or SonarQube failures**:
-   - Check the `reusable-security-scan.yml` step output. Snyk is configured to fail the build automatically on high severity issues (`severity_threshold: high`).
-   - If Snyk is blocking the build, you must resolve the vulnerabilities locally, update dependencies, and push again. Soft failing (`continue-on-error`) is explicitly disabled by design.
-2. **OIDC Authentication Failures**:
-   - Verify that `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are properly set in your GitHub organization or repository secrets.
-   - Ensure the calling repository has `permissions: { id-token: write, contents: read }` in its caller workflow.
-   - Verify that the Workload Identity / Federated Credential is properly mapped to the calling repository in Azure.
-3. **Kustomize / Deployment Failures**:
-   - Ensure that `kustomize_path` points to a valid directory in `resolveops-application` containing a `kustomization.yaml` file.
-   - Run `kubectl kustomize <path>` locally to verify there are no syntax errors in your YAML files.
+### `quickhaul-prod`
+- **Cluster**: `quickhaul-aks`
+- **Namespace**: `quickhaul-prod`
+- **Action**: Pass `environment: "prod"` and `namespace: "quickhaul-prod"` to the `reusable-helm-deploy-aks.yml` workflow. Usually triggered on tags or main branch.
+
+### `resolveops`
+- **Cluster**: `resolveops-aks`
+- **Namespace**: `resolveops`
+- **Action**: Pass `environment: "prod"`, `namespace: "resolveops"` and appropriate cluster variables to deploy the ResolveOps platform itself.
+
+## Secrets and Variables
+
+### Required Secrets
+The following secrets MUST be added to your GitHub repository or organization secrets for OIDC authentication:
+- `AZURE_CLIENT_ID`: The client ID of your Azure Managed Identity / App Registration.
+- `AZURE_TENANT_ID`: Your Azure AD Tenant ID.
+- `AZURE_SUBSCRIPTION_ID`: Your Azure Subscription ID.
+- `ARGOCD_AUTH_TOKEN`: (Optional) Only required if using the `reusable-argocd-sync.yml` workflow.
+
+### Required Variables
+- `ACR_LOGIN_SERVER`: Example: `myacr.azurecr.io`
+- `AKS_RESOURCE_GROUP`: Azure resource group containing the AKS cluster.
+- `AKS_CLUSTER_NAME`: Name of the AKS cluster.
+
+### CI/CD Secrets vs Application Runtime Secrets
+
+**CI/CD Secrets** are strictly for allowing GitHub Actions to authenticate with infrastructure components (like Azure, ACR, AKS, and ArgoCD). They belong in GitHub Settings > Secrets. Examples include:
+- `AZURE_CLIENT_ID`
+- `ARGOCD_AUTH_TOKEN`
+- `SONAR_TOKEN` (if used)
+
+**Application Runtime Secrets** are required by your deployed application to function (like MongoDB connection strings, Redis passwords, JWT secrets, SMTP credentials, API keys).
+**CRITICAL**: Do NOT store runtime secrets in GitHub Actions. They should be managed externally (e.g., Azure Key Vault, HashiCorp Vault, or Sealed Secrets) and injected directly into the Kubernetes cluster or retrieved by the application at runtime. CI/CD templates should remain generic and unaware of application-specific runtime secrets.

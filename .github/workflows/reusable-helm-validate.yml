@@ -1,0 +1,41 @@
+name: Reusable Helm Validate
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Directory where the Helm chart resides"
+        required: false
+        type: string
+        default: "."
+      helm-chart-path:
+        description: "Path to Helm chart directory"
+        required: true
+        type: string
+      helm-values-file:
+        description: "Path to Helm values file"
+        required: false
+        type: string
+        default: "values.yaml"
+
+jobs:
+  helm-validate:
+    name: Helm Lint and Template Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.2'
+
+      - name: Helm Lint
+        run: helm lint ${{ inputs.helm-chart-path }} --values ${{ inputs.helm-chart-path }}/${{ inputs.helm-values-file }}
+
+      - name: Helm Template Validation
+        run: helm template test-release ${{ inputs.helm-chart-path }} --values ${{ inputs.helm-chart-path }}/${{ inputs.helm-values-file }} > /dev/null

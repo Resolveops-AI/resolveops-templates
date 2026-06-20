@@ -1,0 +1,52 @@
+name: Reusable ArgoCD Sync
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Target environment (e.g., dev, prod)"
+        required: true
+        type: string
+      release-name:
+        description: "ArgoCD Application Name to sync"
+        required: true
+        type: string
+      argocd-server:
+        description: "ArgoCD Server URL (e.g., argocd.example.com)"
+        required: true
+        type: string
+      namespace:
+        description: "Namespace to deploy into"
+        required: false
+        type: string
+    secrets:
+      ARGOCD_AUTH_TOKEN:
+        description: "ArgoCD Auth Token"
+        required: true
+
+jobs:
+  argocd-sync:
+    name: Sync ArgoCD Application
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
+
+      - name: Sync Application
+        run: |
+          argocd app sync ${{ inputs.release-name }} \
+            --server ${{ inputs.argocd-server }} \
+            --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --grpc-web
+
+      - name: Wait for Application Rollout
+        run: |
+          argocd app wait ${{ inputs.release-name }} \
+            --server ${{ inputs.argocd-server }} \
+            --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
+            --grpc-web \
+            --timeout 300

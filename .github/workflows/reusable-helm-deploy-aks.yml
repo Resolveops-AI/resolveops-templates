@@ -1,0 +1,101 @@
+name: Reusable Helm Deploy to AKS
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Deployment environment (e.g., dev, prod)"
+        required: true
+        type: string
+      aks-resource-group:
+        description: "AKS Resource Group"
+        required: true
+        type: string
+      aks-cluster-name:
+        description: "AKS Cluster Name"
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes Namespace"
+        required: true
+        type: string
+      release-name:
+        description: "Helm Release Name"
+        required: true
+        type: string
+      helm-chart-path:
+        description: "Path to Helm chart directory"
+        required: true
+        type: string
+      helm-values-file:
+        description: "Path to Helm values file"
+        required: false
+        type: string
+        default: "values.yaml"
+      working-directory:
+        description: "Working directory"
+        required: false
+        type: string
+        default: "."
+      image-name:
+        description: "Docker image name to deploy"
+        required: false
+        type: string
+      acr-login-server:
+        description: "ACR Login Server"
+        required: false
+        type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        description: "Azure Client ID for OIDC"
+        required: true
+      AZURE_TENANT_ID:
+        description: "Azure Tenant ID for OIDC"
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: "Azure Subscription ID for OIDC"
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to AKS via Helm
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS Credentials
+        run: az aks get-credentials --resource-group ${{ inputs.aks-resource-group }} --name ${{ inputs.aks-cluster-name }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.2'
+
+      - name: Deploy using Helm
+        run: |
+          IMAGE_ARGS=""
+          if [ -n "${{ inputs.image-name }}" ] && [ -n "${{ inputs.acr-login-server }}" ]; then
+            IMAGE_ARGS="--set image.repository=${{ inputs.acr-login-server }}/${{ inputs.image-name }} --set image.tag=${{ github.sha }}"
+          fi
+          
+          helm upgrade --install ${{ inputs.release-name }} ${{ inputs.helm-chart-path }} \
+            --namespace ${{ inputs.namespace }} \
+            --create-namespace \
+            --values ${{ inputs.helm-chart-path }}/${{ inputs.helm-values-file }} \
+            $IMAGE_ARGS \
+            --wait
