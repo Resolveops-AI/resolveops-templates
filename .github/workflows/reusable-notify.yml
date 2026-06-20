@@ -1,0 +1,52 @@
+name: Reusable Notification
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Name of the service"
+        required: true
+        type: string
+      status:
+        description: "Status of the pipeline (success/failure)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: false
+        default: "dev"
+        type: string
+      run_url:
+        description: "GitHub Actions run URL"
+        required: false
+        default: ""
+        type: string
+      webhook_url:
+        description: "Optional webhook URL for notifications"
+        required: false
+        type: string
+
+jobs:
+  notify:
+    name: Pipeline Notification
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: GitHub Step Summary Notification
+        run: |
+          echo "## Pipeline Status: ${{ inputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run URL:** ${{ inputs.run_url }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Send Webhook Notification
+        if: inputs.webhook_url != ''
+        run: |
+          curl -X POST "${{ inputs.webhook_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "service": "${{ inputs.service_name }}",
+              "status": "${{ inputs.status }}",
+              "environment": "${{ inputs.environment }}",
+              "run_url": "${{ inputs.run_url }}"
+            }' || echo "Failed to send webhook notification"

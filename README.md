@@ -1,9 +1,13 @@
 # ResolveOps AI — Reusable Workflow Templates
 
-This repository provides **org-level reusable GitHub Actions workflows** for all services
-in the [Resolveops-AI](https://github.com/Resolveops-AI) organization.
+This repository provides **org-level reusable GitHub Actions workflows** for all services in the [Resolveops-AI](https://github.com/Resolveops-AI) organization.
 
-Modeled after the [QuickHaulTransits/quickhaul-templates](https://github.com/QuickHaulTransits) pattern.
+## Architecture & Role
+
+This repository is part of a 3-repo architecture designed for maintainability and separation of concerns:
+1. **resolveops-application**: Contains the source code and Kubernetes manifests (`kustomization.yaml`, `deployment.yaml`, etc.). It invokes these templates in its `build-deploy.yml` pipeline.
+2. **resolveops-templates** (this repo): Contains reusable CI/CD templates. It is kept intentionally simple, and does not hold any infrastructure configuration or application logic.
+3. **resolveops-infrastructure**: Contains the Terraform code required to provision the underlying Azure infrastructure (AKS, ACR, Key Vault, etc.). Terraform workflows belong *only* in that repository.
 
 ---
 
@@ -11,66 +15,37 @@ Modeled after the [QuickHaulTransits/quickhaul-templates](https://github.com/Qui
 
 | Workflow | File | Purpose |
 |---|---|---|
-| Build, Scan & Push | `reusable-build-scan-push.yml` | Docker build + ACR push |
-| Deploy to AKS | `reusable-deploy.yml` | Rolling deploy via kubectl |
-| Email Notify | `reusable-email-notify.yml` | Pipeline status notification |
+| **Security Scan** | `reusable-security-scan.yml` | Centralized SonarQube, Snyk, and optional Trivy scanning. |
+| **Build & Push** | `reusable-docker-build-push.yml` | Standardized Docker build and push to Azure Container Registry (ACR) via OIDC. |
+| **Deploy to AKS** | `reusable-deploy-aks.yml` | Deploys Kustomize manifests to AKS via OIDC. |
+| **Notify** | `reusable-notify.yml` | Provides GitHub step summaries and optional webhook notifications. |
 
 ---
 
-## Usage
+## Required Secrets & Variables
 
-In any service repo's `.github/workflows/ci.yml`:
+### Secrets (Set at Org or Repo Level)
+- `AZURE_CLIENT_ID`: Azure Client ID for OIDC authentication.
+- `AZURE_TENANT_ID`: Azure Tenant ID for OIDC authentication.
+- `AZURE_SUBSCRIPTION_ID`: Azure Subscription ID for OIDC authentication.
+- `SONAR_TOKEN`: Token for SonarQube authentication.
+- `SONAR_HOST_URL`: URL of the SonarQube server.
+- `SNYK_TOKEN`: API token for Snyk vulnerability scanning.
 
-```yaml
-jobs:
-  build-and-push:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-build-scan-push.yml@main
-    with:
-      service_name: my-service
-      docker_context: .
-      image_tag: ${{ github.sha }}
-    secrets:
-      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-```
-
----
-
-## Required Secrets (Set at Org Level)
-
-| Secret | Description |
-|---|---|
-| `ACR_LOGIN_SERVER` | Azure Container Registry login server (`resolveopsai.azurecr.io`) |
-| `ACR_USERNAME` | ACR username |
-| `ACR_PASSWORD` | ACR password or service principal secret |
-| `KUBECONFIG_DATA` | Base64-encoded AKS kubeconfig (for deploy workflow) |
-
-Set these at: **GitHub Org → Settings → Secrets → Actions**
+### Variables
+- `ACR_LOGIN_SERVER`: Azure Container Registry login server (e.g., `resolveopsai.azurecr.io`).
+- `ACR_NAME`: Azure Container Registry name (e.g., `resolveopsai`).
+- `AZURE_RESOURCE_GROUP`: Azure Resource Group for the AKS cluster.
+- `AKS_CLUSTER_NAME`: Name of the AKS cluster.
+- `AKS_NAMESPACE`: Default Kubernetes namespace for deployment.
 
 ---
 
-## ACR Login Server
+## Why are these workflows simple?
 
-All workflows use the `ACR_LOGIN_SERVER` secret — **never hardcode** the registry URL in any workflow file.
+- **Separation of Concerns**: Templates do not contain application-specific logic or infrastructure definitions.
+- **Security First**: Security scans are blocking operations (`continue-on-error: false`, no `|| true` fallbacks). Docker pushes will only execute *after* scans have passed in the calling workflow.
+- **OIDC Authentication**: We avoid long-lived credentials (`KUBECONFIG_DATA`) and utilize temporary, federated OIDC credentials for Azure operations.
+- **Deployment Manifests**: Deploy workflows expect the application repository to provide the Kubernetes deployment manifests (via Kustomize).
 
-This allows the org to migrate to a different ACR instance by updating a single secret.
-
-## CI/CD Pipeline Configuration
-
-This repository uses a central reusable workflow for continuous integration and delivery.
-
-### Required GitHub Secrets
-The following secrets must be configured in the GitHub repository settings (Settings > Secrets and variables > Actions):
-
-* SONAR_TOKEN: Token for SonarQube authentication
-* SONAR_HOST_URL: URL of the SonarQube server
-* SNYK_TOKEN: API token for Snyk vulnerability scanning
-* AZURE_CLIENT_ID: Azure Client ID for OIDC authentication
-* AZURE_TENANT_ID: Azure Tenant ID for OIDC authentication
-* AZURE_SUBSCRIPTION_ID: Azure Subscription ID for OIDC authentication
-
-### Required GitHub Variables
-The following variables must be configured (Settings > Secrets and variables > Actions > Variables):
-
-* ACR_LOGIN_SERVER: Azure Container Registry login server (e.g., esolveopsai.azurecr.io)
+For detailed instructions on how to use these templates in your application repo, refer to the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).
