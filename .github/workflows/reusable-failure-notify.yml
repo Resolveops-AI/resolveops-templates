@@ -1,0 +1,84 @@
+name: Reusable Failure Notification
+
+on:
+  workflow_call:
+    inputs:
+      workflow-name:
+        description: "Name of the workflow that failed"
+        required: true
+        type: string
+      environment-name:
+        description: "Target environment (e.g., dev, prod). Leave empty if not applicable."
+        required: false
+        type: string
+        default: "N/A"
+      repository-name:
+        description: "Full repository name (e.g., Resolveops-AI/resolveops-application)"
+        required: true
+        type: string
+      branch-name:
+        description: "Branch where the failure occurred"
+        required: true
+        type: string
+      commit-sha:
+        description: "Commit SHA that triggered the workflow"
+        required: true
+        type: string
+      run-url:
+        description: "URL to the failing GitHub Actions run"
+        required: true
+        type: string
+      triggered-by:
+        description: "GitHub actor who triggered the workflow"
+        required: true
+        type: string
+
+# No secrets required — this workflow uses only GitHub-native visibility.
+
+jobs:
+  notify-failure:
+    name: Pipeline Failure Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write Failure Summary to GitHub Step Summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## ❌ Pipeline Failure Notification
+
+          A pipeline has failed. See details below.
+
+          ---
+
+          | Field              | Value |
+          |--------------------|-------|
+          | **Repository**     | ${{ inputs.repository-name }} |
+          | **Workflow**       | ${{ inputs.workflow-name }} |
+          | **Environment**    | ${{ inputs.environment-name }} |
+          | **Branch**         | ${{ inputs.branch-name }} |
+          | **Commit SHA**     | `${{ inputs.commit-sha }}` |
+          | **Triggered By**   | ${{ inputs.triggered-by }} |
+
+          ---
+
+          🔗 **[View Failing Run](${{ inputs.run-url }})**
+
+          ---
+
+          > This summary is written to GitHub Actions step summary.
+          > GitHub will notify repository watchers based on their notification settings.
+          > No external services (email, Slack, Teams) are used.
+          EOF
+
+      - name: Print Failure Summary to Console
+        run: |
+          echo "========================================"
+          echo "  PIPELINE FAILURE NOTIFICATION"
+          echo "========================================"
+          echo "  Repository  : ${{ inputs.repository-name }}"
+          echo "  Workflow    : ${{ inputs.workflow-name }}"
+          echo "  Environment : ${{ inputs.environment-name }}"
+          echo "  Branch      : ${{ inputs.branch-name }}"
+          echo "  Commit SHA  : ${{ inputs.commit-sha }}"
+          echo "  Triggered By: ${{ inputs.triggered-by }}"
+          echo "  Run URL     : ${{ inputs.run-url }}"
+          echo "========================================"

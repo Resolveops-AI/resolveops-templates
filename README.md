@@ -15,10 +15,12 @@ This repository is part of a 3-repo architecture designed for maintainability an
 
 | Workflow | File | Purpose |
 |---|---|---|
-| **Security Scan** | `reusable-security-scan.yml` | Centralized SonarQube, Snyk, and optional Trivy scanning. |
-| **Build & Push** | `reusable-docker-build-push.yml` | Standardized Docker build and push to Azure Container Registry (ACR) via OIDC. |
-| **Deploy to AKS** | `reusable-deploy-aks.yml` | Deploys Kustomize manifests to AKS via OIDC. |
-| **Notify** | `reusable-notify.yml` | Provides GitHub step summaries and optional webhook notifications. |
+| **Build & Push** | `reusable-docker-build-push.yml` | Docker build and push to Azure Container Registry (ACR) via OIDC. |
+| **Trivy Scan** | `reusable-trivy-scan.yml` | Trivy vulnerability scan on a container image in ACR. |
+| **Helm Validate** | `reusable-helm-validate.yml` | Helm lint and `helm template` validation. |
+| **Helm Deploy AKS** | `reusable-helm-deploy-aks.yml` | Deploys using Helm to an AKS cluster via OIDC. |
+| **ArgoCD Sync** | `reusable-argocd-sync.yml` | Triggers an ArgoCD application sync and waits for rollout. |
+| **Failure Notify** | `reusable-failure-notify.yml` | Writes a failure summary to the GitHub Actions job summary. No secrets required. |
 
 ---
 
@@ -49,3 +51,5 @@ This repository is part of a 3-repo architecture designed for maintainability an
 - **Deployment Manifests**: Deploy workflows expect the application repository to provide the Kubernetes deployment manifests (via Kustomize).
 
 For detailed instructions on how to use these templates in your application repo, refer to the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).
+
+For a full reference of all reusable workflows, inputs, and example caller patterns, see [docs/reusable-workflows.md](docs/reusable-workflows.md).
