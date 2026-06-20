@@ -4,6 +4,57 @@ This document is a reference for all reusable GitHub Actions workflows provided 
 
 ---
 
+## Trigger Pattern — All Caller Workflows
+
+All caller workflows in the `resolveops-application` repository **must** use the following trigger pattern:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+```
+
+**Do not use `pull_request` triggers.** Pull requests generate an OIDC subject like:
+`repo:Resolveops-AI/resolveops-application:pull_request`
+
+This does NOT match the branch-based federated credential and will cause Azure OIDC login failures.
+
+---
+
+## Azure OIDC Federated Credential Configuration
+
+These reusable workflows authenticate to Azure using **OIDC with branch-based federated credentials only**. No GitHub Environments are used at the job level, which keeps the OIDC subject stable and predictable.
+
+### Expected OIDC Subjects
+
+| Repository | Expected Subject |
+|---|---|
+| `resolveops-infrastructure` | `repo:Resolveops-AI/resolveops-infrastructure:ref:refs/heads/main` |
+| `resolveops-application` | `repo:Resolveops-AI/resolveops-application:ref:refs/heads/main` |
+
+### What NOT to configure
+
+- ❌ Do **not** configure environment-scoped federated credentials (e.g., subject: `environment:dev`)
+- ❌ Do **not** configure pull_request federated credentials
+- ✅ Use only branch-based subjects matching the table above
+
+> **Why**: If a reusable workflow job has `environment: <name>` at the job level, the OIDC subject automatically becomes `repo:<owner>/<repo>:environment:<name>`, which won't match a branch-based federated credential. All `environment:` job-level keys have been removed from these reusable templates to prevent this issue.
+
+---
+
+## Architecture — ResolveOps vs QuickHaul
+
+| Component | Cluster | Namespace(s) | Environments |
+|---|---|---|---|
+| ResolveOps AI Platform | `resolveops-aks` | `resolveops` | None — single platform |
+| QuickHaul Transits | `quickhaul-aks` | `quickhaul-dev`, `quickhaul-prod` | dev + prod |
+
+**ResolveOps has no dev/prod environments.** It runs once as a platform. Do not pass `environment: dev` or `environment: prod` when calling workflows for ResolveOps. The `environment` input on these workflows is a **display label only** — it does not gate deployments.
+
+---
+
 ## Available Workflows
 
 | Workflow File | Purpose |
@@ -28,7 +79,7 @@ This workflow writes a structured failure notification to the **GitHub Actions s
 | Input | Required | Description |
 |---|---|---|
 | `workflow-name` | ✅ | Name of the workflow that failed |
-| `environment-name` | ❌ | Target environment (e.g., `dev`, `prod`). Defaults to `N/A` |
+| `environment-name` | ❌ | Display label only. Defaults to `N/A` |
 | `repository-name` | ✅ | Full repo name (e.g., `Resolveops-AI/resolveops-application`) |
 | `branch-name` | ✅ | Branch where the failure occurred |
 | `commit-sha` | ✅ | The commit SHA that triggered the pipeline |
@@ -39,9 +90,7 @@ This workflow writes a structured failure notification to the **GitHub Actions s
 
 **None.** This workflow is completely secret-free.
 
-### Example Caller Workflow
-
-The following is an example of how any repository can call this reusable workflow on failure.
+### Example: QuickHaul Caller Workflow
 
 ```yaml
 name: QuickHaul CI/CD
@@ -52,11 +101,13 @@ on:
       - main
     paths:
       - 'sample-apps/quickhaul/**'
+  workflow_dispatch:
 
 jobs:
   build-push:
     uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
     with:
+      working-directory: "sample-apps/quickhaul"
       image-name: "quickhaul-transits"
       acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
     secrets:
@@ -68,12 +119,13 @@ jobs:
     needs: build-push
     uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-deploy-aks.yml@main
     with:
-      environment: "dev"
-      aks-cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
-      aks-resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
+      environment: "dev"          # Display label only — not a GitHub Environment gate
+      aks-cluster-name: ${{ vars.QUICKHAUL_AKS_CLUSTER_NAME }}
+      aks-resource-group: ${{ vars.QUICKHAUL_AKS_RESOURCE_GROUP }}
       namespace: "quickhaul-dev"
       release-name: "quickhaul"
       helm-chart-path: "sample-apps/quickhaul/helm/quickhaul"
+      helm-values-file: "values-dev.yaml"
       image-name: "quickhaul-transits"
       acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
     secrets:
@@ -97,6 +149,60 @@ jobs:
 ```
 
 > **Key pattern**: `if: failure()` on the `needs` list ensures the notification job only runs when any of the upstream jobs fail. It does not run on success.
+
+### Example: ResolveOps Platform Caller Workflow
+
+ResolveOps has **no dev/prod environments**. It deploys once to `resolveops-aks` in the `resolveops` namespace.
+
+```yaml
+name: ResolveOps Platform Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
+    with:
+      image-name: "resolveops-platform"
+      acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  deploy:
+    needs: build-push
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-deploy-aks.yml@main
+    with:
+      # No environment: input — ResolveOps is a single platform, no dev/prod split
+      aks-cluster-name: ${{ vars.RESOLVEOPS_AKS_CLUSTER_NAME }}
+      aks-resource-group: ${{ vars.RESOLVEOPS_AKS_RESOURCE_GROUP }}
+      namespace: "resolveops"
+      release-name: "resolveops"
+      helm-chart-path: "helm/resolveops"
+      image-name: "resolveops-platform"
+      acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  notify-on-failure:
+    needs: [build-push, deploy]
+    if: failure()
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-failure-notify.yml@main
+    with:
+      workflow-name: "ResolveOps Platform Deploy"
+      repository-name: ${{ github.repository }}
+      branch-name: ${{ github.ref_name }}
+      commit-sha: ${{ github.sha }}
+      run-url: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      triggered-by: ${{ github.actor }}
+```
 
 ---
 

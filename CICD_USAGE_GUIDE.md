@@ -23,6 +23,7 @@ on:
       - main
     paths:
       - 'sample-apps/quickhaul/**'
+  workflow_dispatch:
 
 jobs:
   build-push:
@@ -33,7 +34,6 @@ jobs:
       dockerfile-path: "Dockerfile"
       context-path: "."
       acr-login-server: ${{ vars.ACR_LOGIN_SERVER }}
-      environment: "dev"
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -91,7 +91,7 @@ jobs:
 ### `resolveops`
 - **Cluster**: `resolveops-aks`
 - **Namespace**: `resolveops`
-- **Action**: Pass `environment: "prod"`, `namespace: "resolveops"` and appropriate cluster variables to deploy the ResolveOps platform itself.
+- **Action**: Pass `namespace: "resolveops"` and appropriate cluster variables to deploy the ResolveOps platform itself. Do NOT pass `environment` input since ResolveOps runs as a single platform with no dev/prod environments.
 
 ## Secrets and Variables
 

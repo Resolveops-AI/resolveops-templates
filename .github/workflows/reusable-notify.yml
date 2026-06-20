@@ -12,9 +12,9 @@ on:
         required: true
         type: string
       environment:
-        description: "Target environment"
+        description: "Environment label (optional, for display only)"
         required: false
-        default: "dev"
+        default: ""
         type: string
       run_url:
         description: "GitHub Actions run URL"

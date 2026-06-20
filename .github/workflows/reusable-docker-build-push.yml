@@ -26,11 +26,6 @@ on:
         description: "Azure Container Registry login server"
         required: true
         type: string
-      environment:
-        description: "Target environment (e.g., dev, prod)"
-        required: false
-        type: string
-        default: "dev"
     secrets:
       AZURE_CLIENT_ID:
         description: "Azure Client ID for OIDC"

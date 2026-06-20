@@ -4,9 +4,10 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: "Deployment environment (e.g., dev, prod)"
-        required: true
+        description: "Deployment environment label for job naming (e.g., dev, prod). Does not create a GitHub Environment gate."
+        required: false
         type: string
+        default: "main"
       aks-resource-group:
         description: "AKS Resource Group"
         required: true
@@ -58,9 +59,8 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to AKS via Helm
+    name: Deploy (${{ inputs.environment }}) to AKS via Helm
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read

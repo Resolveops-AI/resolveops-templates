@@ -4,9 +4,10 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: "Target environment (e.g., dev, prod)"
-        required: true
+        description: "Environment label for job naming (e.g., dev, prod). Does not create a GitHub Environment gate."
+        required: false
         type: string
+        default: "main"
       release-name:
         description: "ArgoCD Application Name to sync"
         required: true
@@ -26,9 +27,8 @@ on:
 
 jobs:
   argocd-sync:
-    name: Sync ArgoCD Application
+    name: ArgoCD Sync (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - name: Install ArgoCD CLI
         run: |
