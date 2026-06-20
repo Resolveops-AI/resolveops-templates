@@ -13,12 +13,16 @@ This repository is part of a 3-repo architecture designed for maintainability an
 
 ## Available Templates
 
+> **Note:** These reusable workflows do not normally run by themselves; they are designed to be called by application or infrastructure repositories using `workflow_call`.
+
 | Workflow | File | Purpose |
 |---|---|---|
-| **Security Scan** | `reusable-security-scan.yml` | Centralized SonarQube, Snyk, and optional Trivy scanning. |
 | **Build & Push** | `reusable-docker-build-push.yml` | Standardized Docker build and push to Azure Container Registry (ACR) via OIDC. |
-| **Deploy to AKS (Kustomize)** | `reusable-deploy-aks.yml` | Deploys Kustomize manifests to AKS via OIDC. |
-| **Deploy to AKS (Plain K8s)** | `reusable-kubernetes-deploy.yml` | Deploys plain Kubernetes manifests to AKS via OIDC (used for ResolveOps platform). |
+| **Helm Deploy to AKS** | `reusable-helm-deploy-aks.yml` | Deploys using Helm to an AKS cluster via OIDC. |
+| **Plain K8s Deploy** | `reusable-kubernetes-deploy.yml` | Deploys plain Kubernetes manifests to AKS via OIDC. |
+| **Helm Validate** | `reusable-helm-validate.yml` | Validates Helm charts using lint and template. |
+| **Trivy Scan** | `reusable-trivy-scan.yml` | Vulnerability scanning for Docker images. |
+| **ArgoCD Sync** | `reusable-argocd-sync.yml` | Triggers synchronization for ArgoCD applications. |
 | **Notify** | `reusable-notify.yml` | Provides GitHub step summaries and optional webhook notifications. |
 
 ---
@@ -29,13 +33,14 @@ This repository is part of a 3-repo architecture designed for maintainability an
 - `AZURE_CLIENT_ID`: Azure Client ID for OIDC authentication.
 - `AZURE_TENANT_ID`: Azure Tenant ID for OIDC authentication.
 - `AZURE_SUBSCRIPTION_ID`: Azure Subscription ID for OIDC authentication.
-- `SONAR_TOKEN`: Token for SonarQube authentication.
-- `SONAR_HOST_URL`: URL of the SonarQube server.
-- `SNYK_TOKEN`: API token for Snyk vulnerability scanning.
+- `SONAR_TOKEN`: Token for SonarCloud/SonarQube authentication (Note: SonarCloud uses `SONAR_TOKEN` and does not require `SONAR_HOST_URL`).
+- `SNYK_TOKEN`: API token for Snyk vulnerability scanning (if applicable).
+
+> **Note:** We no longer require legacy secrets such as `ACR_USERNAME`, `ACR_PASSWORD`, or `KUBECONFIG_DATA`.
 
 ### Variables
-- `ACR_LOGIN_SERVER`: Azure Container Registry login server (e.g., `resolveopsai.azurecr.io`).
 - `ACR_NAME`: Azure Container Registry name (e.g., `resolveopsai`).
+- `ACR_LOGIN_SERVER`: Azure Container Registry login server (e.g., `resolveopsai.azurecr.io`).
 - `AZURE_RESOURCE_GROUP`: Azure Resource Group for the AKS cluster.
 - `AKS_CLUSTER_NAME`: Name of the AKS cluster.
 - `AKS_NAMESPACE`: Default Kubernetes namespace for deployment.
