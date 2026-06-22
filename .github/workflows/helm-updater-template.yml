@@ -77,7 +77,7 @@ jobs:
           fi
           
           if git diff --quiet; then
-            echo "No changes to commit"
+            echo "No Helm values changes to commit."
             exit 0
           fi
           

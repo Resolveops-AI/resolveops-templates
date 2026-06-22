@@ -108,7 +108,7 @@ jobs:
       values_file: ./helm/values-dev.yaml
       image_tag_key: image.tag
       image_tag: dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
-      branch_name: main
+      branch_name: ${{ github.head_ref }}
       commit_message: "chore: update dev image to dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }} [skip ci]"
 
   notify:
@@ -132,6 +132,7 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 ```
 
 Note: `cd-reusable-template.yml` should be called only if Argo CD is reachable from GitHub-hosted runners. Otherwise, let Argo CD automatically sync from the updated Helm values.

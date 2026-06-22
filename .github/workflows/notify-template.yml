@@ -39,11 +39,10 @@ on:
         description: "Workflow name"
         required: true
         type: string
-      webhook_url:
-        description: "Optional webhook URL for notifications"
-        required: false
-        type: string
+
     secrets:
+      WEBHOOK_URL:
+        required: false
       SMTP_HOST:
         required: false
       SMTP_PORT:
@@ -78,9 +77,9 @@ jobs:
           echo "**Run URL:** ${{ inputs.run_url }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send Webhook Notification
-        if: ${{ inputs.webhook_url != '' && inputs.webhook_url != null }}
+        if: ${{ secrets.WEBHOOK_URL != '' && secrets.WEBHOOK_URL != null }}
         run: |
-          curl -X POST "${{ inputs.webhook_url }}" \
+          curl -X POST "${{ secrets.WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
               "service": "${{ inputs.service_name }}",
