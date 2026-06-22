@@ -7,8 +7,8 @@ The `resolveops-templates` repository has been fully refactored to align with th
 ### Key Structural Changes
 
 1. **Deletion of Legacy Workflows**:
-   - The legacy workflows (`reusable-ci.yml`, `reusable-sonarqube.yml`, `reusable-snyk.yml`, `reusable-build-scan-push.yml`, `reusable-deploy.yml`, `reusable-email-notify.yml`) have been entirely deleted to reduce technical debt and enforce the new architecture.
-   - We introduced cleaner, modern templates (`reusable-security-scan.yml`, `reusable-docker-build-push.yml`, `reusable-deploy-aks.yml`, `reusable-notify.yml`) as the sole standard for consuming repositories.
+   - The legacy workflows (`reusable-ci.yml`, `reusable-sonarqube.yml`, `reusable-snyk.yml`, `reusable-build-scan-push.yml`, `reusable-deploy.yml`, `reusable-email-notify.yml`, `reusable-deploy-aks.yml`, `reusable-kubernetes-deploy.yml`, `reusable-security-scan.yml`, `reusable-docker-build-push.yml`, `reusable-helm-update.yml`, `reusable-argocd-sync.yml`, `reusable-notify.yml`) have been entirely deleted to reduce technical debt and enforce the new architecture.
+   - We introduced cleaner, modern templates (`ci-reusable-template.yml`, `docker-build-push-template.yml`, `helm-updater-template.yml`, `cd-reusable-template.yml`, `notify-template.yml`) as the sole standard for consuming repositories.
 
 2. **Removal of External Dependencies and Config Repos**:
    - **No more `resolveops-config`**: The deploy workflows no longer check out an external configuration repository. Deployments rely on the application repository's own manifests or passed configurations.

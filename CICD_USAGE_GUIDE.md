@@ -15,17 +15,18 @@ The templates repo should not control branch triggers directly except through `w
 
 ### 2. Pull request from `dev` to `main`
 * Call `ci-reusable-template.yml` for CI/security scanning.
-* Call `docker-build-push-template.yml` if dev/test Docker images are required to be built and pushed.
+* Call `docker-build-push-template.yml` to build dev images.
 * Image tag format should support: `dev-pr-<PR_NUMBER>-<short-sha>`
 * Call `helm-updater-template.yml` to update `values-dev.yaml`.
 * Optional `cd-reusable-template.yml` only if Argo CD is reachable.
 
 ### 3. Merge/push to `main`
 * Call `ci-reusable-template.yml` again.
-* Call `docker-build-push-template.yml` to build/push or retag production images.
+* Calculate semantic version for production image tag.
+* Production job should use GitHub Environment manual approval in the caller repo.
+* Call `docker-build-push-template.yml` to build/push or retag production release semantic image.
 * Semantic version format: `vMAJOR.MINOR.PATCH`
 * Call `helm-updater-template.yml` to update `values-prod.yaml`.
-* Production job should use GitHub Environment manual approval in the caller repo.
 * Optional `cd-reusable-template.yml` only if Argo CD is reachable.
 
 ## Required Variables and Secrets
@@ -112,13 +113,25 @@ jobs:
 
   notify:
     needs: helm-update
-    if: always()
+    if: ${{ always() && needs.helm-update.result == 'failure' }}
     uses: Resolveops-AI/resolveops-templates/.github/workflows/notify-template.yml@main
     with:
       service_name: app
       environment: dev
-      status: ${{ job.status }}
+      failed_job_name: helm-update
+      status: ${{ needs.helm-update.result }}
       run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      branch_name: ${{ github.ref_name }}
+      commit_sha: ${{ github.sha }}
+      actor: ${{ github.actor }}
+      workflow_name: ${{ github.workflow }}
+    secrets:
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
 ```
 
 Note: `cd-reusable-template.yml` should be called only if Argo CD is reachable from GitHub-hosted runners. Otherwise, let Argo CD automatically sync from the updated Helm values.

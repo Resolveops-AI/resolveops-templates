@@ -11,6 +11,10 @@ on:
         description: "Target environment"
         required: true
         type: string
+      failed_job_name:
+        description: "Name of the failed job"
+        required: false
+        type: string
       status:
         description: "Status of the pipeline (e.g., success, failure)"
         required: true
@@ -19,10 +23,39 @@ on:
         description: "GitHub Actions run URL"
         required: true
         type: string
+      branch_name:
+        description: "Branch name"
+        required: true
+        type: string
+      commit_sha:
+        description: "Commit SHA"
+        required: true
+        type: string
+      actor:
+        description: "Actor who triggered the run"
+        required: true
+        type: string
+      workflow_name:
+        description: "Workflow name"
+        required: true
+        type: string
       webhook_url:
         description: "Optional webhook URL for notifications"
         required: false
         type: string
+    secrets:
+      SMTP_HOST:
+        required: false
+      SMTP_PORT:
+        required: false
+      SMTP_USERNAME:
+        required: false
+      SMTP_PASSWORD:
+        required: false
+      EMAIL_FROM:
+        required: false
+      EMAIL_TO:
+        required: false
 
 jobs:
   notify:
@@ -35,10 +68,17 @@ jobs:
           echo "## Pipeline Status: ${{ inputs.status }}" >> $GITHUB_STEP_SUMMARY
           echo "**Service:** ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.failed_job_name }}" ]; then
+            echo "**Failed Job:** ${{ inputs.failed_job_name }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**Branch:** ${{ inputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor:** ${{ inputs.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ inputs.workflow_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Run URL:** ${{ inputs.run_url }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send Webhook Notification
-        if: ${{ inputs.webhook_url != null && inputs.webhook_url != '' }}
+        if: ${{ inputs.webhook_url != '' && inputs.webhook_url != null }}
         run: |
           curl -X POST "${{ inputs.webhook_url }}" \
             -H "Content-Type: application/json" \
@@ -46,5 +86,31 @@ jobs:
               "service": "${{ inputs.service_name }}",
               "status": "${{ inputs.status }}",
               "environment": "${{ inputs.environment }}",
+              "failed_job": "${{ inputs.failed_job_name }}",
+              "branch": "${{ inputs.branch_name }}",
+              "actor": "${{ inputs.actor }}",
               "run_url": "${{ inputs.run_url }}"
-            }'
+            }' || true
+
+      - name: Send Email Notification
+        if: ${{ secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.EMAIL_FROM != '' && secrets.EMAIL_TO != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[${{ inputs.status }}] ${{ inputs.workflow_name }} for ${{ inputs.service_name }}"
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_FROM }}
+          body: |
+            Pipeline Status: ${{ inputs.status }}
+            Service: ${{ inputs.service_name }}
+            Environment: ${{ inputs.environment }}
+            Failed Job: ${{ inputs.failed_job_name }}
+            Branch: ${{ inputs.branch_name }}
+            Commit: ${{ inputs.commit_sha }}
+            Actor: ${{ inputs.actor }}
+            Workflow: ${{ inputs.workflow_name }}
+            Run URL: ${{ inputs.run_url }}
+        continue-on-error: true
