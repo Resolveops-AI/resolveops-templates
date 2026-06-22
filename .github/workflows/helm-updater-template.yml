@@ -29,9 +29,8 @@ on:
         type: string
       branch_name:
         description: "The branch name to push changes back to"
-        required: false
+        required: true
         type: string
-        default: "main"
 
 jobs:
   update-helm-values:

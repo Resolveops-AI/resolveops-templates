@@ -10,7 +10,8 @@ This repository enforces strict boundaries:
 - **NO** Kubernetes manifests
 - **NO** Helm charts
 - **NO** Argo CD Application YAMLs
-- **NO** secrets
+- **NO** HashiCorp Vault
+- **NO** deployment-specific hardcoding
 
 For Infrastructure as Code, see the `resolveops-infrastructure` repository.
 For Application code, Helm charts, and Argo CD apps, see the `resolveops-application` repository.
@@ -19,10 +20,10 @@ For Application code, Helm charts, and Argo CD apps, see the `resolveops-applica
 
 The following reusable workflows are provided in the `.github/workflows/` directory:
 
-* `reusable-security-scan.yml`
-* `reusable-docker-build-push.yml`
-* `reusable-helm-update.yml`
-* `reusable-argocd-sync.yml`
-* `reusable-notify.yml`
+* `ci-reusable-template.yml`
+* `docker-build-push-template.yml`
+* `helm-updater-template.yml`
+* `cd-reusable-template.yml`
+* `notify-template.yml`
 
-For detailed usage, examples, required secrets, variables, and versioning rules, please read the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).
+For detailed usage, branch behaviors, examples, required secrets, variables, and versioning rules, please read the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).

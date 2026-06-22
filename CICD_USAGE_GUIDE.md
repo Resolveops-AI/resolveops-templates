@@ -2,24 +2,40 @@
 
 This guide explains how to use the reusable workflows in `resolveops-templates` from caller repositories.
 
-## Final CI/CD Flow
+## Final CI/CD Flow & Branch Behavior
 
-The standard FitForge-style CI/CD flow should follow these steps in order:
+The templates repo should not control branch triggers directly except through `workflow_call`. Branch behavior must be controlled by `resolveops-application` caller workflows.
 
-1. **Security Scan**
-2. **Docker Build/Push**
-3. **Helm Update** (commits new image tags to the repository)
-4. **Argo CD Auto-sync / Optional Manual Sync**
-5. **Notify**
+### 1. Push to `dev` branch
+* Application repo may run lightweight validation only.
+* No Docker image build is required from templates on dev push unless caller explicitly calls it.
+* Templates are generic and do not force image creation on dev push.
+* No ACR push required.
+* No Helm values update required.
+
+### 2. Pull request from `dev` to `main`
+* Call `ci-reusable-template.yml` for CI/security scanning.
+* Call `docker-build-push-template.yml` if dev/test Docker images are required to be built and pushed.
+* Image tag format should support: `dev-pr-<PR_NUMBER>-<short-sha>`
+* Call `helm-updater-template.yml` to update `values-dev.yaml`.
+* Optional `cd-reusable-template.yml` only if Argo CD is reachable.
+
+### 3. Merge/push to `main`
+* Call `ci-reusable-template.yml` again.
+* Call `docker-build-push-template.yml` to build/push or retag production images.
+* Semantic version format: `vMAJOR.MINOR.PATCH`
+* Call `helm-updater-template.yml` to update `values-prod.yaml`.
+* Production job should use GitHub Environment manual approval in the caller repo.
+* Optional `cd-reusable-template.yml` only if Argo CD is reachable.
 
 ## Required Variables and Secrets
 
 ### Required Caller Repository Variables
 Configure these variables in your caller repositories (e.g., `resolveops-application`):
-* `ACR_NAME`: Azure Container Registry name (e.g., `resolveopsacr03`)
-* `ACR_LOGIN_SERVER`: Azure Container Registry login server URL (e.g., `resolveopsacr03.azurecr.io`)
-* `AKS_CLUSTER_NAME`: Name of the AKS cluster
+* `ACR_NAME`: Azure Container Registry name
+* `ACR_LOGIN_SERVER`: Azure Container Registry login server URL
 * `AZURE_RESOURCE_GROUP`: Azure Resource Group name
+* `AKS_CLUSTER_NAME`: Name of the AKS cluster
 * `RESOLVEOPS_NAMESPACE`: Target Kubernetes namespace for ResolveOps
 * `QUICKHAUL_DEV_NAMESPACE`: Target Kubernetes namespace for QuickHaul Dev
 * `QUICKHAUL_PROD_NAMESPACE`: Target Kubernetes namespace for QuickHaul Prod
@@ -35,29 +51,32 @@ Configure these secrets in your caller repositories:
 * `SNYK_TOKEN`: Snyk API token for vulnerability scanning
 * `ARGOCD_AUTH_TOKEN` (optional): Token for optional Argo CD manual sync
 
-## Versioning Rules
+## Versioning Rules & Semantic Versioning Expectation
 
-To ensure reliable GitOps deployments:
-* **Dev image tags** should use `dev-<short-sha>`, example `dev-a1b2c3d`.
-* **Production image tags** should use semantic versions, example `v1.0.0`.
-* **Do not use** only `dev` or `prod` as the main GitOps image tag because those are mutable.
-* `dev`/`prod` tags can be optional aliases, but Helm values **must** use immutable tags.
+* Semantic version is calculated in the caller repo.
+* Templates only accept the final `image_tag` input.
+* Templates should not decide version bump logic.
+* Caller may use Conventional Commits:
+  * `BREAKING CHANGE` or `!` = major
+  * `feat` = minor
+  * `fix` = patch
+  * `chore`/`refactor`/`docs`/`test` = patch for this project
 
 ## Usage Examples
 
-### 1. ResolveOps CI Example
+### 1. CI Validation Example (PR)
 
 ```yaml
-name: ResolveOps CI
+name: CI Validation
 on:
-  push:
+  pull_request:
     branches: [ "main" ]
 
 jobs:
   security-scan:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-security-scan.yml@main
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/ci-reusable-template.yml@main
     with:
-      working_directory: ./resolveops
+      working_directory: ./src
       run_sonar: true
       run_snyk: true
       run_trivy: true
@@ -68,14 +87,14 @@ jobs:
 
   build-push:
     needs: security-scan
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/docker-build-push-template.yml@main
     with:
-      image_name: resolveops-api
-      dockerfile_path: ./resolveops/Dockerfile
-      context_path: ./resolveops
+      image_name: app
+      dockerfile_path: ./src/Dockerfile
+      context_path: ./src
       acr_name: ${{ vars.ACR_NAME }}
       acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      image_tag: dev-${{ github.sha }}
+      image_tag: dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -83,132 +102,23 @@ jobs:
 
   helm-update:
     needs: build-push
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-update.yml@main
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/helm-updater-template.yml@main
     with:
-      values_file: ./helm/resolveops/values.yaml
-      image_repository_key: image.repository
+      values_file: ./helm/values-dev.yaml
       image_tag_key: image.tag
-      image_repository: ${{ vars.ACR_LOGIN_SERVER }}/resolveops-api
-      image_tag: dev-${{ github.sha }}
-      commit_message: "chore: update resolveops-api image to dev-${{ github.sha }} [skip ci]"
+      image_tag: dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+      branch_name: main
+      commit_message: "chore: update dev image to dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }} [skip ci]"
 
   notify:
     needs: helm-update
     if: always()
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-notify.yml@main
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/notify-template.yml@main
     with:
-      service_name: resolveops-api
+      service_name: app
       environment: dev
       status: ${{ job.status }}
       run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 ```
 
-### 2. QuickHaul CI Example
-
-```yaml
-name: QuickHaul CI
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  security-scan:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-security-scan.yml@main
-    with:
-      working_directory: ./quickhaul
-      run_sonar: true
-      run_snyk: true
-      run_trivy: true
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-  build-push:
-    needs: security-scan
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
-    with:
-      image_name: quickhaul-app
-      dockerfile_path: ./quickhaul/Dockerfile
-      context_path: ./quickhaul
-      acr_name: ${{ vars.ACR_NAME }}
-      acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      image_tag: dev-${{ github.sha }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-  helm-update:
-    needs: build-push
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-update.yml@main
-    with:
-      values_file: ./helm/quickhaul/values-dev.yaml
-      image_tag_key: image.tag
-      image_tag: dev-${{ github.sha }}
-      commit_message: "chore: update quickhaul-app dev image to dev-${{ github.sha }} [skip ci]"
-
-  notify:
-    needs: helm-update
-    if: always()
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-notify.yml@main
-    with:
-      service_name: quickhaul-app
-      environment: dev
-      status: ${{ job.status }}
-      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-```
-
-### 3. QuickHaul Production Promotion Example
-
-```yaml
-name: QuickHaul Production Promotion
-on:
-  release:
-    types: [published]
-
-jobs:
-  build-push-prod:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
-    with:
-      image_name: quickhaul-app
-      dockerfile_path: ./quickhaul/Dockerfile
-      context_path: ./quickhaul
-      acr_name: ${{ vars.ACR_NAME }}
-      acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      image_tag: ${{ github.event.release.tag_name }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-  helm-update-prod:
-    needs: build-push-prod
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-helm-update.yml@main
-    with:
-      values_file: ./helm/quickhaul/values-prod.yaml
-      image_tag_key: image.tag
-      image_tag: ${{ github.event.release.tag_name }}
-      commit_message: "chore: update quickhaul-app prod image to ${{ github.event.release.tag_name }} [skip ci]"
-
-  argocd-sync:
-    needs: helm-update-prod
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-argocd-sync.yml@main
-    with:
-      argocd_app_name: quickhaul-prod
-      argocd_server: ${{ vars.ARGOCD_SERVER }}
-    secrets:
-      ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
-
-  notify:
-    needs: argocd-sync
-    if: always()
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-notify.yml@main
-    with:
-      service_name: quickhaul-app
-      environment: prod
-      status: ${{ job.status }}
-      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-```
-
-Note: If Argo CD is private inside AKS, GitHub-hosted runners may not reach it, making manual sync from the pipeline impossible. In that case, preferred deployment method is Argo CD auto-sync triggered by the Helm values update.
+Note: `cd-reusable-template.yml` should be called only if Argo CD is reachable from GitHub-hosted runners. Otherwise, let Argo CD automatically sync from the updated Helm values.
