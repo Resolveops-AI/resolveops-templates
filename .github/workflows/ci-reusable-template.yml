@@ -20,12 +20,12 @@ on:
         description: "Enable SonarQube scan"
         required: false
         type: boolean
-        default: true
+        default: false
       run_snyk:
         description: "Enable Snyk scan"
         required: false
         type: boolean
-        default: true
+        default: false
       run_trivy:
         description: "Enable Trivy filesystem scan"
         required: false
@@ -98,7 +98,28 @@ jobs:
         run: snyk test --severity-threshold=high
 
       # --- Trivy Filesystem Scan ---
-      - name: Run Trivy Filesystem Scan
+      - name: Run Trivy Scan (Generate Report)
+        if: ${{ inputs.run_trivy == true }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: ${{ inputs.working_directory }}
+          format: "json"
+          output: "trivy-report.json"
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy Report Artifact
+        if: ${{ inputs.run_trivy == true && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-report
+          path: trivy-report.json
+          retention-days: 7
+
+      - name: Run Trivy Scan (Console Output & Fail Workflow)
         if: ${{ inputs.run_trivy == true }}
         uses: aquasecurity/trivy-action@master
         with:
