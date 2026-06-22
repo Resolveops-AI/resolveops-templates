@@ -3,34 +3,35 @@ name: Reusable Docker Build & Push
 on:
   workflow_call:
     inputs:
-      working-directory:
-        description: "Directory containing the source code"
-        required: false
-        type: string
-        default: "."
-      image-name:
+      image_name:
         description: "Name of the Docker image"
         required: true
         type: string
-      dockerfile-path:
+      dockerfile_path:
         description: "Path to Dockerfile relative to context"
-        required: false
+        required: true
         type: string
-        default: "Dockerfile"
-      context-path:
+      context_path:
         description: "Docker build context directory"
-        required: false
+        required: true
         type: string
-        default: "."
-      acr-login-server:
+      acr_name:
+        description: "Azure Container Registry name"
+        required: true
+        type: string
+      acr_login_server:
         description: "Azure Container Registry login server"
         required: true
         type: string
-      environment:
-        description: "Target environment (e.g., dev, prod)"
-        required: false
+      image_tag:
+        description: "Image tag to build and push"
+        required: true
         type: string
-        default: "dev"
+      push_latest:
+        description: "Whether to also push the 'latest' tag"
+        required: false
+        type: boolean
+        default: false
     secrets:
       AZURE_CLIENT_ID:
         description: "Azure Client ID for OIDC"
@@ -49,9 +50,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -64,19 +62,24 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to Azure Container Registry
-        run: az acr login --name ${{ inputs.acr-login-server }}
+        run: az acr login --name ${{ inputs.acr_name }}
 
       - name: Build Docker Image
         run: |
-          IMAGE_URI="${{ inputs.acr-login-server }}/${{ inputs.image-name }}"
+          IMAGE_URI="${{ inputs.acr_login_server }}/${{ inputs.image_name }}"
           docker build \
-            -t $IMAGE_URI:${{ github.sha }} \
+            -t $IMAGE_URI:${{ inputs.image_tag }} \
             -t $IMAGE_URI:latest \
-            -f ${{ inputs.dockerfile-path }} \
-            ${{ inputs.context-path }}
+            -f ${{ inputs.dockerfile_path }} \
+            ${{ inputs.context_path }}
 
-      - name: Push Docker Image
+      - name: Push Docker Image (with specific tag)
         run: |
-          IMAGE_URI="${{ inputs.acr-login-server }}/${{ inputs.image-name }}"
-          docker push $IMAGE_URI:${{ github.sha }}
+          IMAGE_URI="${{ inputs.acr_login_server }}/${{ inputs.image_name }}"
+          docker push $IMAGE_URI:${{ inputs.image_tag }}
+
+      - name: Push Docker Image (with latest tag)
+        if: ${{ inputs.push_latest == true }}
+        run: |
+          IMAGE_URI="${{ inputs.acr_login_server }}/${{ inputs.image_name }}"
           docker push $IMAGE_URI:latest

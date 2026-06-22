@@ -3,22 +3,19 @@ name: Reusable ArgoCD Sync
 on:
   workflow_call:
     inputs:
-      environment:
-        description: "Target environment (e.g., dev, prod)"
-        required: true
-        type: string
-      release-name:
+      argocd_app_name:
         description: "ArgoCD Application Name to sync"
         required: true
         type: string
-      argocd-server:
+      argocd_server:
         description: "ArgoCD Server URL (e.g., argocd.example.com)"
         required: true
         type: string
-      namespace:
-        description: "Namespace to deploy into"
+      timeout:
+        description: "Timeout in seconds to wait for sync completion"
         required: false
-        type: string
+        type: number
+        default: 300
     secrets:
       ARGOCD_AUTH_TOKEN:
         description: "ArgoCD Auth Token"
@@ -28,7 +25,6 @@ jobs:
   argocd-sync:
     name: Sync ArgoCD Application
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - name: Install ArgoCD CLI
         run: |
@@ -38,15 +34,15 @@ jobs:
 
       - name: Sync Application
         run: |
-          argocd app sync ${{ inputs.release-name }} \
-            --server ${{ inputs.argocd-server }} \
+          argocd app sync ${{ inputs.argocd_app_name }} \
+            --server ${{ inputs.argocd_server }} \
             --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
             --grpc-web
 
       - name: Wait for Application Rollout
         run: |
-          argocd app wait ${{ inputs.release-name }} \
-            --server ${{ inputs.argocd-server }} \
+          argocd app wait ${{ inputs.argocd_app_name }} \
+            --server ${{ inputs.argocd_server }} \
             --auth-token ${{ secrets.ARGOCD_AUTH_TOKEN }} \
             --grpc-web \
-            --timeout 300
+            --timeout ${{ inputs.timeout }}

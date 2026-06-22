@@ -7,19 +7,17 @@ on:
         description: "Name of the service"
         required: true
         type: string
-      status:
-        description: "Status of the pipeline (success/failure)"
-        required: true
-        type: string
       environment:
         description: "Target environment"
-        required: false
-        default: "dev"
+        required: true
+        type: string
+      status:
+        description: "Status of the pipeline (e.g., success, failure)"
+        required: true
         type: string
       run_url:
         description: "GitHub Actions run URL"
-        required: false
-        default: ""
+        required: true
         type: string
       webhook_url:
         description: "Optional webhook URL for notifications"
@@ -40,7 +38,7 @@ jobs:
           echo "**Run URL:** ${{ inputs.run_url }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send Webhook Notification
-        if: inputs.webhook_url != ''
+        if: ${{ inputs.webhook_url != null && inputs.webhook_url != '' }}
         run: |
           curl -X POST "${{ inputs.webhook_url }}" \
             -H "Content-Type: application/json" \
