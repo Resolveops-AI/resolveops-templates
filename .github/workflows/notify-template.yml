@@ -61,6 +61,14 @@ jobs:
     name: Pipeline Notification
     runs-on: ubuntu-latest
     if: always()
+    env:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
     steps:
       - name: GitHub Step Summary Notification
         run: |
@@ -77,9 +85,9 @@ jobs:
           echo "**Run URL:** ${{ inputs.run_url }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send Webhook Notification
-        if: ${{ secrets.WEBHOOK_URL != '' && secrets.WEBHOOK_URL != null }}
+        if: env.WEBHOOK_URL != ''
         run: |
-          curl -X POST "${{ secrets.WEBHOOK_URL }}" \
+          curl -X POST "${{ env.WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
               "service": "${{ inputs.service_name }}",
@@ -92,16 +100,16 @@ jobs:
             }' || true
 
       - name: Send Email Notification
-        if: ${{ secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.EMAIL_FROM != '' && secrets.EMAIL_TO != '' }}
+        if: env.SMTP_HOST != '' && env.SMTP_PORT != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.EMAIL_FROM != '' && env.EMAIL_TO != ''
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          server_address: ${{ env.SMTP_HOST }}
+          server_port: ${{ env.SMTP_PORT }}
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
           subject: "[${{ inputs.status }}] ${{ inputs.workflow_name }} for ${{ inputs.service_name }}"
-          to: ${{ secrets.EMAIL_TO }}
-          from: ${{ secrets.EMAIL_FROM }}
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ env.EMAIL_FROM }}
           body: |
             Pipeline Status: ${{ inputs.status }}
             Service: ${{ inputs.service_name }}
