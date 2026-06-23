@@ -32,6 +32,11 @@ on:
         required: false
         type: boolean
         default: false
+      push_image:
+        description: "Whether to push the image to ACR"
+        required: false
+        type: boolean
+        default: true
     secrets:
       AZURE_CLIENT_ID:
         description: "Azure Client ID for OIDC"
@@ -84,12 +89,13 @@ jobs:
           severity: "CRITICAL,HIGH"
 
       - name: Push Docker Image (with specific tag)
+        if: ${{ inputs.push_image == true }}
         run: |
           IMAGE_URI="${{ inputs.acr_login_server }}/${{ inputs.image_name }}"
           docker push $IMAGE_URI:${{ inputs.image_tag }}
 
       - name: Push Docker Image (with latest tag)
-        if: ${{ inputs.push_latest == true }}
+        if: ${{ inputs.push_image == true && inputs.push_latest == true }}
         run: |
           IMAGE_URI="${{ inputs.acr_login_server }}/${{ inputs.image_name }}"
           docker push $IMAGE_URI:latest
