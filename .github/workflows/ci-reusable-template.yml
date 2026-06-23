@@ -60,7 +60,7 @@ jobs:
         id: check-properties
         if: ${{ inputs.run_sonar == true }}
         run: |
-          if [ -f "sonar-project.properties" ]; then
+          if [ -f "sonar-project.properties" ] || [ -f "${{ github.workspace }}/sonar-project.properties" ]; then
             echo "has_properties=true" >> $GITHUB_OUTPUT
           else
             echo "has_properties=false" >> $GITHUB_OUTPUT
