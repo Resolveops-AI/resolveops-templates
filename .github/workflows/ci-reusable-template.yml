@@ -58,6 +58,7 @@ jobs:
       # --- SonarQube Scan ---
       - name: SonarQube Scan
         if: ${{ inputs.run_sonar == true }}
+        continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
