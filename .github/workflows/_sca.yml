@@ -1,0 +1,31 @@
+name: SCA Scan
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: "Directory containing the source code"
+        required: false
+        type: string
+        default: "."
+    secrets:
+      SNYK_TOKEN:
+        required: true
+
+jobs:
+  snyk:
+    name: Snyk Vulnerability Scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+      - name: Snyk Test
+        run: snyk test --all-projects --severity-threshold=high --skip-unresolved

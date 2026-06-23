@@ -1,0 +1,33 @@
+name: Notify Template
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+      subject:
+        required: false
+        type: string
+        default: "Pipeline Notification"
+      body:
+        required: false
+        type: string
+        default: "See GitHub Actions for details."
+      artifact-name:
+        required: false
+        type: string
+    secrets:
+      BREVO_API_KEY:
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notification
+        run: |
+          echo "Sending notification for ${{ inputs.service-name }}"
+          echo "Subject: ${{ inputs.subject }}"
+          echo "Body: ${{ inputs.body }}"
+          # You can add custom API calls to Brevo/Sendinblue or Slack here
