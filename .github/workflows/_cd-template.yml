@@ -66,4 +66,16 @@ jobs:
           fi
 
           git commit -m "chore: update ${{ inputs.service-name }} image tag to ${{ inputs.image-tag }} [skip ci]" || echo "No changes to commit"
-          git push origin ${{ inputs.environment }}
+          
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          until git push origin ${{ inputs.environment }}; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Failed to push after $MAX_RETRIES attempts."
+              exit 1
+            fi
+            echo "Push failed due to conflict. Pulling with rebase and retrying in 5 seconds..."
+            git pull --rebase origin ${{ inputs.environment }}
+            sleep 5
+          done
