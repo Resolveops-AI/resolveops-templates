@@ -56,33 +56,12 @@ jobs:
           fetch-depth: 0
 
       # --- SonarQube Scan ---
-      - name: Check for sonar-project.properties
-        id: check-properties
+      - name: SonarQube Scan
         if: ${{ inputs.run_sonar == true }}
-        run: |
-          if [ -f "sonar-project.properties" ] || [ -f "${{ github.workspace }}/sonar-project.properties" ]; then
-            echo "has_properties=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_properties=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: SonarQube Scan (with properties file)
-        if: ${{ inputs.run_sonar == true && steps.check-properties.outputs.has_properties == 'true' }}
         uses: SonarSource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: SonarQube Scan (without properties file)
-        if: ${{ inputs.run_sonar == true && steps.check-properties.outputs.has_properties == 'false' }}
-        uses: SonarSource/sonarqube-scan-action@v2
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          args: >
-            -Dsonar.projectKey=${{ inputs.image_name || github.event.repository.name }}
-            -Dsonar.projectName=${{ inputs.image_name || github.event.repository.name }}
 
       # --- Snyk Scan ---
       - name: Install Snyk CLI
