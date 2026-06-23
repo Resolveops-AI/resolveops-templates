@@ -6,6 +6,21 @@ This guide explains how to use the reusable workflows in `resolveops-templates` 
 
 The templates repo should not control branch triggers directly except through `workflow_call`. Branch behavior must be controlled by `resolveops-application` caller workflows.
 
+## Monorepo Microservice Pattern
+
+These templates are **generic** and do not hardcode any application-specific service names (like `frontend`, `auth`, etc.).
+
+When building a monorepo containing multiple microservices, the caller repository MUST:
+1. Use a tool/script (e.g., `paths-filter`) to **detect changed services**.
+2. Output a **matrix** of those changed services.
+3. Call `docker-build-push-template.yml` using `strategy: matrix:` to build one service per call.
+4. Call `helm-updater-template.yml` using `strategy: matrix:` to update the tag for one service per call.
+
+**No template should automatically build all services or iterate through all charts.**
+
+### Example Caller Pattern Flow:
+`detect-changed-services` -> outputs matrix of changed services -> `build-scan-push` matrix calls `docker-build-push-template.yml` once per changed service -> `helm-update` matrix calls `helm-updater-template.yml` once per changed service.
+
 ### 1. Push to `dev` branch
 * Application repo may run lightweight validation only.
 * No Docker image build is required from templates on dev push unless caller explicitly calls it.
