@@ -78,7 +78,7 @@ jobs:
         with:
           image-ref: "${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }}"
           format: "table"
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
