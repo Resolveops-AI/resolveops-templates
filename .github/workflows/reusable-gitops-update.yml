@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-gitops:
@@ -67,6 +68,7 @@ jobs:
           kustomize edit set image ${{ inputs.image_name }}=${{ inputs.image_name }}:${{ inputs.image_tag }}
 
       - name: Commit and Push changes
+        if: ${{ inputs.target_branch != 'main' }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -77,3 +79,13 @@ jobs:
             git commit -m "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }} [skip ci]"
             git push origin ${{ inputs.target_branch }}
           fi
+
+      - name: Create Pull Request for Main
+        if: ${{ inputs.target_branch == 'main' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: gitops-update-${{ inputs.image_name }}-${{ inputs.image_tag }}
+          title: "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }}"
+          commit-message: "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }} [skip ci]"
+          base: ${{ inputs.target_branch }}
+          body: "Automated GitOps update for production deployment. Please merge to deploy."
