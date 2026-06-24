@@ -3,47 +3,47 @@ name: Verify ACR Image
 on:
   workflow_call:
     inputs:
-      acr_login_server:
-        required: true
-        type: string
-        description: 'ACR Login Server'
       image_name:
+        description: "Name of the Docker image"
         required: true
         type: string
-        description: 'Docker image name'
       image_tag:
+        description: "Tag to verify (e.g., dev-<sha>)"
         required: true
         type: string
-        description: 'Docker image tag to verify'
-    secrets:
-      AZURE_CLIENT_ID:
+      acr_name:
+        description: "Azure Container Registry Name"
         required: true
-      AZURE_TENANT_ID:
+        type: string
+      acr_login_server:
+        description: "Azure Container Registry Login Server"
         required: true
-      AZURE_SUBSCRIPTION_ID:
-        required: true
-
-permissions:
-  id-token: write
-  contents: read
+        type: string
 
 jobs:
   verify:
+    name: Verify Image Exists
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Verify Image Exists in ACR
+      - name: Verify Image in ACR
+        id: verify-image
         run: |
-          ACR_NAME=$(echo ${{ inputs.acr_login_server }} | cut -d'.' -f1)
-          if az acr repository show --name $ACR_NAME --image ${{ inputs.image_name }}:${{ inputs.image_tag }} > /dev/null 2>&1; then
-            echo "Success: Image ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }} exists."
+          echo "Checking if image exists: ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }}"
+          
+          # Use Azure CLI to check repository tags
+          EXISTS=$(az acr repository show-tags -n ${{ inputs.acr_name }} --repository ${{ inputs.image_name }} --query "contains(@, '${{ inputs.image_tag }}')" -o tsv)
+          
+          if [ "$EXISTS" == "true" ]; then
+            echo "✅ Image ${{ inputs.image_name }}:${{ inputs.image_tag }} found in ACR."
           else
-            echo "Error: Image ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }} does not exist in ACR. Ensure the dev workflow successfully built and pushed this artifact before PR/prod promotion."
+            echo "❌ ERROR: Image ${{ inputs.image_name }}:${{ inputs.image_tag }} NOT found in ACR!"
+            echo "A successful Dev push must create the artifact before it can be verified or promoted."
             exit 1
           fi

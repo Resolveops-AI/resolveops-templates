@@ -3,55 +3,44 @@ name: Promote ACR Image
 on:
   workflow_call:
     inputs:
-      acr_login_server:
-        required: true
-        type: string
-        description: 'ACR Login Server'
       image_name:
+        description: "Name of the Docker image"
         required: true
         type: string
-        description: 'Docker image name'
-      source_image_tag:
+      source_tag:
+        description: "Source tag to promote (e.g., dev-<sha>)"
         required: true
         type: string
-        description: 'Source Docker image tag to pull'
-      target_image_tag:
+      target_tag:
+        description: "Target tag to apply (e.g., v1.0.0)"
         required: true
         type: string
-        description: 'Target Docker image tag to push'
-    secrets:
-      AZURE_CLIENT_ID:
+      acr_name:
+        description: "Azure Container Registry Name"
         required: true
-      AZURE_TENANT_ID:
-        required: true
-      AZURE_SUBSCRIPTION_ID:
-        required: true
-
-permissions:
-  id-token: write
-  contents: read
+        type: string
 
 jobs:
   promote:
+    name: Promote Image
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Login to ACR
+      - name: Retag Image in ACR
         run: |
-          ACR_NAME=$(echo ${{ inputs.acr_login_server }} | cut -d'.' -f1)
-          az acr login --name $ACR_NAME
-
-      - name: Pull Image
-        run: docker pull ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.source_image_tag }}
-
-      - name: Retag Image
-        run: docker tag ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.source_image_tag }} ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.target_image_tag }}
-
-      - name: Push Image
-        run: docker push ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.target_image_tag }}
+          echo "Promoting ${{ inputs.image_name }}:${{ inputs.source_tag }} to ${{ inputs.image_name }}:${{ inputs.target_tag }}"
+          
+          # Use az acr import to retag within the same registry instantly without downloading
+          az acr import \
+            --name ${{ inputs.acr_name }} \
+            --source ${{ inputs.acr_name }}.azurecr.io/${{ inputs.image_name }}:${{ inputs.source_tag }} \
+            --image ${{ inputs.image_name }}:${{ inputs.target_tag }} \
+            --force
+          
+          echo "✅ Promotion successful!"
