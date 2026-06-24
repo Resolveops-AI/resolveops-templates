@@ -20,17 +20,16 @@ on:
         required: false
 
 jobs:
-  validate:
+  sast:
+    name: SAST (SonarQube)
     runs-on: ubuntu-latest
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: SonarQube Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarcloud-github-action@master
@@ -38,10 +37,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Run Snyk to check for vulnerabilities
+  sca:
+    name: SCA (Snyk)
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run Snyk Setup
         if: env.SNYK_TOKEN != ''
         uses: snyk/actions/setup@master
-        
       - name: Snyk Test
         if: env.SNYK_TOKEN != ''
         continue-on-error: true
@@ -49,9 +55,28 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+  dockerfile-check:
+    name: Dockerfile Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Check Non-Root User
+        run: |
+          if [ -f "${{ inputs.dockerfile_path }}" ]; then
+            grep -E "USER 10001|USER 101" ${{ inputs.dockerfile_path }} || (echo "Error: Dockerfile must run as non-root" && exit 1)
+          else
+            echo "Dockerfile not found at ${{ inputs.dockerfile_path }}, skipping."
+          fi
+
+  image-build-and-scan:
+    name: Image Build & Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
       - name: Build Docker Image for scanning
         run: docker build -t temp-image:latest -f ${{ inputs.dockerfile_path }} ${{ inputs.context_path }}
-
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:

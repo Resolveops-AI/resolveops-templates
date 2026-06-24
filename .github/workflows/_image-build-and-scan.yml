@@ -1,0 +1,32 @@
+name: Image Build & Scan
+
+on:
+  workflow_call:
+    inputs:
+      context_path:
+        required: true
+        type: string
+        description: 'Docker build context path'
+      dockerfile_path:
+        required: true
+        type: string
+        description: 'Path to the Dockerfile'
+
+jobs:
+  image-build-and-scan:
+    name: Image Build & Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Build Docker Image for scanning
+        run: docker build -t temp-image:latest -f ${{ inputs.dockerfile_path }} ${{ inputs.context_path }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'temp-image:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'

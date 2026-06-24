@@ -1,0 +1,24 @@
+name: Dockerfile Security Check
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile_path:
+        required: true
+        type: string
+        description: 'Path to the Dockerfile'
+
+jobs:
+  dockerfile-check:
+    name: Dockerfile Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Check Non-Root User
+        run: |
+          if [ -f "${{ inputs.dockerfile_path }}" ]; then
+            grep -E "USER 10001|USER 101" ${{ inputs.dockerfile_path }} || (echo "Error: Dockerfile must run as non-root" && exit 1)
+          else
+            echo "Dockerfile not found at ${{ inputs.dockerfile_path }}, skipping."
+          fi
