@@ -18,6 +18,8 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    env:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
     steps:
       - name: Write GitHub Step Summary
         run: |
@@ -25,7 +27,7 @@ jobs:
           echo "${{ inputs.message }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send Webhook Notification
-        if: ${{ secrets.WEBHOOK_URL != '' }}
+        if: env.WEBHOOK_URL != ''
         continue-on-error: true
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Workflow Status: ${{ inputs.status }}\nMessage: ${{ inputs.message }}"}' ${{ secrets.WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Workflow Status: ${{ inputs.status }}\nMessage: ${{ inputs.message }}"}' $WEBHOOK_URL
