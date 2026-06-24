@@ -18,7 +18,7 @@ jobs:
       - name: Check Non-Root User
         run: |
           if [ -f "${{ inputs.dockerfile_path }}" ]; then
-            grep -E "USER 10001|USER 101" ${{ inputs.dockerfile_path }} || (echo "Error: Dockerfile must run as non-root" && exit 1)
+            grep -E "USER 10001|USER 101|USER nextjs" ${{ inputs.dockerfile_path }} || (echo "Error: Dockerfile must run as non-root" && exit 1)
           else
             echo "Dockerfile not found at ${{ inputs.dockerfile_path }}, skipping."
           fi
