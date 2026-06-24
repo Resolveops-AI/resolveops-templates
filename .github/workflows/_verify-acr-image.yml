@@ -1,0 +1,49 @@
+name: Verify ACR Image
+
+on:
+  workflow_call:
+    inputs:
+      acr_login_server:
+        required: true
+        type: string
+        description: 'ACR Login Server'
+      image_name:
+        required: true
+        type: string
+        description: 'Docker image name'
+      image_tag:
+        required: true
+        type: string
+        description: 'Docker image tag to verify'
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Image Exists in ACR
+        run: |
+          ACR_NAME=$(echo ${{ inputs.acr_login_server }} | cut -d'.' -f1)
+          if az acr repository show --name $ACR_NAME --image ${{ inputs.image_name }}:${{ inputs.image_tag }} > /dev/null 2>&1; then
+            echo "Success: Image ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }} exists."
+          else
+            echo "Error: Image ${{ inputs.acr_login_server }}/${{ inputs.image_name }}:${{ inputs.image_tag }} does not exist in ACR. Ensure the dev workflow successfully built and pushed this artifact before PR/prod promotion."
+            exit 1
+          fi
