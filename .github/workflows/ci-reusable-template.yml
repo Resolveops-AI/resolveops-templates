@@ -81,15 +81,16 @@ jobs:
         continue-on-error: true
 
       # --- Trivy Filesystem Scan ---
-      - name: Run Trivy Scan (Generate Report)
+      - name: Run Trivy Scan
         if: ${{ inputs.run_trivy == true }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
           scan-ref: ${{ inputs.working_directory }}
-          format: "json"
-          output: "trivy-report.json"
-          exit-code: "0"
+          format: "template"
+          template: "@/contrib/html.tpl"
+          output: "trivy-report.html"
+          exit-code: "1" # Fail the workflow on critical/high vulnerabilities
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
@@ -98,18 +99,5 @@ jobs:
         if: ${{ inputs.run_trivy == true && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-security-report
-          path: trivy-report.json
-          retention-days: 7
-
-      - name: Run Trivy Scan (Console Output & Fail Workflow)
-        if: ${{ inputs.run_trivy == true }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: "fs"
-          scan-ref: ${{ inputs.working_directory }}
-          format: "table"
-          exit-code: "0"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
+          name: trivy-security-report-${{ github.sha }}
+          path: trivy-report.html
