@@ -21,13 +21,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Download Trivy HTML Template
+        run: wget https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -O html.tpl
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: ${{ inputs.working_directory }}
           format: 'template'
-          template: '@/contrib/html.tpl'
+          template: 'html.tpl'
           output: 'trivy-report.html'
           severity: 'CRITICAL,HIGH'
 
