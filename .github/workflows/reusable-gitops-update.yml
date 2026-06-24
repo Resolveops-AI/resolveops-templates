@@ -84,6 +84,7 @@ jobs:
         if: ${{ inputs.target_branch == 'main' }}
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.HELM_REPO_PAT || github.token }}
           branch: gitops-update-${{ inputs.image_name }}-${{ inputs.image_tag }}
           title: "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }}"
           commit-message: "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }} [skip ci]"
