@@ -1,0 +1,79 @@
+name: Reusable GitOps Update
+
+on:
+  workflow_call:
+    inputs:
+      manifest_type:
+        required: true
+        type: string
+        description: "'helm' or 'kustomize'"
+      values_file:
+        required: false
+        type: string
+        description: 'Path to values.yaml if using helm'
+      image_tag_key:
+        required: false
+        type: string
+        description: 'Key for image tag in values.yaml'
+      image_repository_key:
+        required: false
+        type: string
+        description: 'Key for image repository in values.yaml'
+      kustomize_dir:
+        required: false
+        type: string
+        description: 'Path to kustomization.yaml dir if using kustomize'
+      image_name:
+        required: true
+        type: string
+        description: 'Name of the image'
+      image_tag:
+        required: true
+        type: string
+        description: 'New tag to set'
+      target_branch:
+        required: true
+        type: string
+        description: 'Branch to update and push to'
+
+permissions:
+  contents: write
+
+jobs:
+  update-gitops:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Update Helm Values
+        if: ${{ inputs.manifest_type == 'helm' }}
+        uses: mikefarah/yq@master
+        with:
+          cmd: |
+            yq eval '${{ inputs.image_tag_key }} = "${{ inputs.image_tag }}"' -i ${{ inputs.values_file }}
+
+      - name: Setup Kustomize
+        if: ${{ inputs.manifest_type == 'kustomize' }}
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Update Kustomize Image
+        if: ${{ inputs.manifest_type == 'kustomize' }}
+        run: |
+          cd ${{ inputs.kustomize_dir }}
+          kustomize edit set image ${{ inputs.image_name }}=${{ inputs.image_name }}:${{ inputs.image_tag }}
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(gitops): update image tag for ${{ inputs.image_name }} to ${{ inputs.image_tag }} [skip ci]"
+            git push origin ${{ inputs.target_branch }}
+          fi

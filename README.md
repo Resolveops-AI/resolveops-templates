@@ -1,39 +1,37 @@
-# ResolveOps CI/CD Templates
+# Resolveops AI Templates
 
-This repository contains **only reusable GitHub Actions workflows** for the FitForge-style shared CI/CD setup. 
+This repository contains reusable GitHub Actions workflows to implement the FitForge-style CI/CD and GitOps flow for Resolveops AI applications.
 
-## Architectural Guidelines
+## Reusable Workflows
 
-This repository enforces strict boundaries:
-- **NO** application code
-- **NO** Terraform configurations
-- **NO** Kubernetes manifests
-- **NO** Helm charts
-- **NO** Argo CD Application YAMLs
-- **NO** HashiCorp Vault
-- **NO** deployment-specific hardcoding
+### 1. `reusable-pr-validation.yml`
+Performs comprehensive validation for Pull Requests:
+- SonarQube/SonarCloud SAST
+- Snyk SCA
+- Trivy Image Scanning (fails on HIGH/CRITICAL vulnerabilities)
+- Ensures strict security standards before merge.
 
-For Infrastructure as Code, see the `resolveops-infrastructure` repository.
-For Application code, Helm charts, and Argo CD apps, see the `resolveops-application` repository.
+### 2. `reusable-docker-build-push.yml`
+Builds and pushes Docker images to Azure Container Registry (ACR):
+- Uses Azure OIDC login for secure authentication without long-lived credentials.
+- Supports immutable tags.
+- Disables `latest` tag by default to enforce explicit versioning.
 
-## Monorepo Microservice Pattern
+### 3. `reusable-gitops-update.yml`
+Updates the GitOps manifest repository (Helm or Kustomize) with the new image tags:
+- Automatically commits with `[skip ci]` to prevent infinite CI loops.
+- Avoids hardcoded secrets, pushing back to the configured `target_branch`.
 
-These templates are intentionally generic and **do not** hardcode any microservice names. When working with a monorepo (like `resolveops-application`), the caller repository is responsible for:
-1. Detecting which specific services have changed.
-2. Generating a matrix of those changed services.
-3. Calling `docker-build-push-template.yml` exactly once per changed service.
-4. Calling `helm-updater-template.yml` exactly once per changed service.
+### 4. `reusable-argocd-sync.yml`
+Optional Argo CD sync workflow:
+- Forces a sync using the Argo CD CLI.
+- Runs only if `ARGOCD_SERVER` and `ARGOCD_AUTH_TOKEN` are provided. Not strictly required since Argo CD can auto-sync based on Git updates.
 
-**No template should automatically build all services.**
+### 5. `reusable-notify.yml`
+Provides notifications for workflow runs:
+- Writes to GitHub Step Summary.
+- Optionally sends a webhook/email notification without failing the main workflow on error.
 
-## Final Workflow List
+## Usage
 
-The following reusable workflows are provided in the `.github/workflows/` directory:
-
-* `ci-reusable-template.yml`
-* `docker-build-push-template.yml`
-* `helm-updater-template.yml`
-* `cd-reusable-template.yml`
-* `notify-template.yml`
-
-For detailed usage, branch behaviors, examples, required secrets, variables, and versioning rules, please read the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md).
+Please see the [CICD_USAGE_GUIDE.md](CICD_USAGE_GUIDE.md) for detailed examples of how to call these reusable workflows from your application repositories.

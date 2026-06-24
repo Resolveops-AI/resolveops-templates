@@ -1,0 +1,31 @@
+name: Reusable Notify
+
+on:
+  workflow_call:
+    inputs:
+      status:
+        required: true
+        type: string
+        description: 'Status of the workflow (e.g., success, failure)'
+      message:
+        required: true
+        type: string
+        description: 'Message to include in the notification'
+    secrets:
+      WEBHOOK_URL:
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write GitHub Step Summary
+        run: |
+          echo "## CI/CD Workflow Status: ${{ inputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ inputs.message }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Send Webhook Notification
+        if: ${{ secrets.WEBHOOK_URL != '' }}
+        continue-on-error: true
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Workflow Status: ${{ inputs.status }}\nMessage: ${{ inputs.message }}"}' ${{ secrets.WEBHOOK_URL }}

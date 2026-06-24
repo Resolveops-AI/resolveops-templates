@@ -1,153 +1,106 @@
 # CI/CD Usage Guide
 
-This guide explains how to use the reusable workflows in `resolveops-templates` from caller repositories.
+This guide explains how to use the reusable workflows provided in the `resolveops-templates` repository for your application CI/CD pipelines following the FitForge GitOps architecture.
 
-## Final CI/CD Flow & Branch Behavior
+## Overview
 
-The templates repo should not control branch triggers directly except through `workflow_call`. Branch behavior must be controlled by `resolveops-application` caller workflows.
+The CI/CD process is split into several distinct phases:
+1. **PR Validation**: Validates code and docker images on Pull Requests to `main`.
+2. **Dev Deployment**: Builds and pushes Docker image to ACR (with a `dev-<sha>` tag) on pushes to `main`, and optionally updates the dev environment GitOps manifests.
+3. **Prod Release Deployment**: Builds and pushes Docker image with a release tag (e.g. `v1.0.0`), updates the prod GitOps manifests, and optionally triggers Argo CD.
+4. **GitOps Update**: Updates the Git repository where Kubernetes manifests (Helm or Kustomize) are stored so that Argo CD can detect the change and apply it.
+5. **Argo CD Sync**: Optional manual trigger for Argo CD to sync immediately. Auto-sync should normally handle this.
 
-## Monorepo Microservice Pattern
+## Required Secrets
 
-These templates are **generic** and do not hardcode any application-specific service names (like `frontend`, `auth`, etc.).
+Your caller repository (or organization) must provide the following secrets:
+- `SONAR_TOKEN`: For SonarCloud/SonarQube scanning.
+- `SNYK_TOKEN`: For Snyk SCA scanning.
+- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`: For Azure OIDC login to push to ACR.
+- `WEBHOOK_URL` (optional): For Teams/Slack/Email webhook notifications.
+- `ARGOCD_AUTH_TOKEN` (optional): For manual Argo CD sync.
 
-When building a monorepo containing multiple microservices, the caller repository MUST:
-1. Use a tool/script (e.g., `paths-filter`) to **detect changed services**.
-2. Output a **matrix** of those changed services.
-3. Call `docker-build-push-template.yml` using `strategy: matrix:` to build one service per call.
-4. Call `helm-updater-template.yml` using `strategy: matrix:` to update the tag for one service per call.
+## Example: Microservice Caller Workflow
 
-**No template should automatically build all services or iterate through all charts.**
-
-### Example Caller Pattern Flow:
-`detect-changed-services` -> outputs matrix of changed services -> `build-scan-push` matrix calls `docker-build-push-template.yml` once per changed service -> `helm-update` matrix calls `helm-updater-template.yml` once per changed service.
-
-### 1. Push to `dev` branch
-* Application repo may run lightweight validation only.
-* No Docker image build is required from templates on dev push unless caller explicitly calls it.
-* Templates are generic and do not force image creation on dev push.
-* No ACR push required.
-* No Helm values update required.
-
-### 2. Pull request from `dev` to `main`
-* Call `ci-reusable-template.yml` for CI/security scanning.
-* Call `docker-build-push-template.yml` to build dev images.
-* Image tag format should support: `dev-pr-<PR_NUMBER>-<short-sha>`
-* Call `helm-updater-template.yml` to update `values-dev.yaml`.
-* Optional `cd-reusable-template.yml` only if Argo CD is reachable.
-
-### 3. Merge/push to `main`
-* Call `ci-reusable-template.yml` again.
-* Calculate semantic version for production image tag.
-* Production job should use GitHub Environment manual approval in the caller repo.
-* Call `docker-build-push-template.yml` to build/push or retag production release semantic image.
-* Semantic version format: `vMAJOR.MINOR.PATCH`
-* Call `helm-updater-template.yml` to update `values-prod.yaml`.
-* Optional `cd-reusable-template.yml` only if Argo CD is reachable.
-
-## Required Variables and Secrets
-
-### Required Caller Repository Variables
-Configure these variables in your caller repositories (e.g., `resolveops-application`):
-* `ACR_NAME`: Azure Container Registry name
-* `ACR_LOGIN_SERVER`: Azure Container Registry login server URL
-* `AZURE_RESOURCE_GROUP`: Azure Resource Group name
-* `AKS_CLUSTER_NAME`: Name of the AKS cluster
-* `RESOLVEOPS_NAMESPACE`: Target Kubernetes namespace for ResolveOps
-* `QUICKHAUL_DEV_NAMESPACE`: Target Kubernetes namespace for QuickHaul Dev
-* `QUICKHAUL_PROD_NAMESPACE`: Target Kubernetes namespace for QuickHaul Prod
-* `ARGOCD_SERVER` (optional): Argo CD server URL
-
-### Required Secrets
-Configure these secrets in your caller repositories:
-* `AZURE_CLIENT_ID`: Azure AD Client ID for OIDC
-* `AZURE_TENANT_ID`: Azure AD Tenant ID for OIDC
-* `AZURE_SUBSCRIPTION_ID`: Azure Subscription ID for OIDC
-* `SONAR_TOKEN`: SonarQube token for code analysis
-* `SONAR_HOST_URL`: SonarQube server URL
-* `SNYK_TOKEN`: Snyk API token for vulnerability scanning
-* `ARGOCD_AUTH_TOKEN` (optional): Token for optional Argo CD manual sync
-
-## Versioning Rules & Semantic Versioning Expectation
-
-* Semantic version is calculated in the caller repo.
-* Templates only accept the final `image_tag` input.
-* Templates should not decide version bump logic.
-* Caller may use Conventional Commits:
-  * `BREAKING CHANGE` or `!` = major
-  * `feat` = minor
-  * `fix` = patch
-  * `chore`/`refactor`/`docs`/`test` = patch for this project
-
-## Usage Examples
-
-### 1. CI Validation Example (PR)
+Create a file in your application repository at `.github/workflows/ci-cd.yml`:
 
 ```yaml
-name: CI Validation
+name: Microservice CI/CD
+
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: write
 
 jobs:
-  security-scan:
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/ci-reusable-template.yml@main
+  # 1. PR Validation
+  pr-validation:
+    if: github.event_name == 'pull_request'
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-pr-validation.yml@main
     with:
-      working_directory: ./src
-      run_sonar: true
-      run_snyk: true
-      run_trivy: true
+      dockerfile_path: 'Dockerfile'
+      context_path: '.'
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+  # 2. Build and Push (Dev or Prod)
   build-push:
-    needs: security-scan
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/docker-build-push-template.yml@main
+    if: github.event_name == 'push'
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-docker-build-push.yml@main
     with:
-      image_name: app
-      dockerfile_path: ./src/Dockerfile
-      context_path: ./src
-      acr_name: ${{ vars.ACR_NAME }}
-      acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      image_tag: dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+      image_name: 'my-microservice'
+      # Tag logic: use short sha for main branch, or the actual tag if a tag was pushed
+      image_tag: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.sha) }}
+      acr_name: 'myacr'
+      acr_login_server: 'myacr.azurecr.io'
+      push_latest: false
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  helm-update:
+  # 3. GitOps Update
+  gitops-update:
     needs: build-push
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/helm-updater-template.yml@main
+    if: github.event_name == 'push'
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-gitops-update.yml@main
     with:
-      values_file: ./helm/values-dev.yaml
-      image_tag_key: image.tag
-      image_tag: dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
-      branch_name: ${{ github.head_ref }}
-      commit_message: "chore: update dev image to dev-pr-${{ github.event.pull_request.number }}-${{ github.sha }} [skip ci]"
+      manifest_type: 'helm'
+      values_file: 'helm/my-microservice/values.yaml'
+      image_tag_key: '.image.tag'
+      image_name: 'my-microservice'
+      image_tag: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.sha) }}
+      target_branch: 'main'
 
-  notify:
-    needs: helm-update
-    if: ${{ always() && needs.helm-update.result == 'failure' }}
-    uses: Resolveops-AI/resolveops-templates/.github/workflows/notify-template.yml@main
+  # 4. Argo CD Sync (Optional)
+  argocd-sync:
+    needs: gitops-update
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-argocd-sync.yml@main
     with:
-      service_name: app
-      environment: dev
-      failed_job_name: helm-update
-      status: ${{ needs.helm-update.result }}
-      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      branch_name: ${{ github.ref_name }}
-      commit_sha: ${{ github.sha }}
-      actor: ${{ github.actor }}
-      workflow_name: ${{ github.workflow }}
+      app_name: 'my-microservice-prod'
+      argocd_server: 'argocd.example.com'
     secrets:
-      SMTP_HOST: ${{ secrets.SMTP_HOST }}
-      SMTP_PORT: ${{ secrets.SMTP_PORT }}
-      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+
+  # 5. Notifications
+  notify:
+    needs: [pr-validation, build-push, gitops-update, argocd-sync]
+    if: always()
+    uses: Resolveops-AI/resolveops-templates/.github/workflows/reusable-notify.yml@main
+    with:
+      status: ${{ job.status }}
+      message: "Workflow completed for my-microservice"
+    secrets:
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 ```
-
-Note: `cd-reusable-template.yml` should be called only if Argo CD is reachable from GitHub-hosted runners. Otherwise, let Argo CD automatically sync from the updated Helm values.
