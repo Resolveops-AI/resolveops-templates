@@ -9,6 +9,11 @@ on:
         required: false
         type: string
         default: "."
+      service_name:
+        description: "Name of the service for unique artifacts"
+        required: false
+        type: string
+        default: "app"
     secrets:
       SNYK_TOKEN:
         required: true
@@ -37,5 +42,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-report-${{ github.sha }}
-          path: snyk-report.html
+          name: snyk-report-${{ inputs.service_name }}-${{ github.sha }}
+          path: ${{ inputs.working_directory }}/snyk-report.html
