@@ -35,12 +35,24 @@ jobs:
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
       - name: Snyk Test
         run: snyk test --all-projects --severity-threshold=critical --skip-unresolved --json > snyk-report.json
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=${{ inputs.working_directory }}/requirements.txt --json-file-output=${{ inputs.working_directory }}/snyk.json
+          
       - name: Generate Snyk HTML Report
         if: always()
-        run: snyk-to-html -i snyk-report.json -o snyk-report.html
-      - name: Upload Snyk Report
+        run: |
+          npm install -g snyk-to-html
+          cd ${{ inputs.working_directory }}
+          snyk-to-html -i snyk.json -o snyk-report.html || true
+
+      - name: Upload Snyk HTML Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-report-${{ inputs.service_name }}-${{ github.sha }}
+          name: snyk-html-report-${{ github.sha }}
           path: ${{ inputs.working_directory }}/snyk-report.html

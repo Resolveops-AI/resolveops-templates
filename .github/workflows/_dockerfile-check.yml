@@ -7,6 +7,11 @@ on:
         required: true
         type: string
         description: 'Path to the Dockerfile'
+      working_directory:
+        required: false
+        type: string
+        default: '.'
+        description: 'Working directory for the scan'
 
 jobs:
   dockerfile-check:
@@ -15,6 +20,24 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: ${{ inputs.working_directory }}
+          format: 'template'
+          template: '@/contrib/html.tpl'
+          output: 'trivy-report.html'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-html-report-${{ github.sha }}
+          path: trivy-report.html
+
       - name: Check Non-Root User
         run: |
           if [ -f "${{ inputs.dockerfile_path }}" ]; then

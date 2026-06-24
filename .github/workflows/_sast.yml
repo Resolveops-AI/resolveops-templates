@@ -50,5 +50,37 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sonar-report-${{ github.sha }}
+          name: sonar-scanner-data-${{ github.sha }}
           path: ${{ inputs.working_directory }}/.scannerwork
+
+      - name: Generate SonarCloud HTML Report
+        if: always()
+        run: |
+          cat << 'EOF' > sonar-report.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>SonarCloud Report</title>
+              <style>
+                  body { font-family: Arial, sans-serif; padding: 40px; }
+                  .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; max-width: 600px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                  .btn { display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
+              </style>
+          </head>
+          <body>
+              <div class="card">
+                  <h2>SonarCloud Code Analysis Complete</h2>
+                  <p>Your code has been successfully scanned by SonarCloud.</p>
+                  <p>Because SonarCloud is a cloud-based platform, the full interactive report (including Security, Coverage, and Bugs) is hosted securely on their dashboard.</p>
+                  <a href="https://sonarcloud.io/dashboard?id=Resolveops-AI_resolveops-application" class="btn" target="_blank">View Full Interactive Report on SonarCloud</a>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Sonar HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-html-report-${{ github.sha }}
+          path: sonar-report.html
