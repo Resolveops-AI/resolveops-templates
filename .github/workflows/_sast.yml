@@ -28,8 +28,6 @@ jobs:
           fetch-depth: 0
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v2
-        with:
-          projectBaseDir: ${{ inputs.working_directory }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -37,8 +35,6 @@ jobs:
       - name: SonarQube Quality Gate Check
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
-        with:
-          scanMetadataReportFile: ${{ inputs.working_directory }}/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
