@@ -47,8 +47,7 @@ jobs:
         if: always()
         run: |
           npm install -g snyk-to-html
-          cd ${{ inputs.working_directory }}
-          snyk-to-html -i snyk.json -o snyk-report.html || true
+          snyk-to-html -i ${{ inputs.working_directory }}/snyk.json -o ${{ inputs.working_directory }}/snyk-report.html || true
 
       - name: Upload Snyk HTML Report
         if: always()
