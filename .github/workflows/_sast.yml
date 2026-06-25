@@ -36,9 +36,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-cov fastapi httpx
-          cd services/api-gateway-service
-          pip install -r requirements.txt || true
-          pytest --cov=. --cov-report=xml || true
+          
+          # Install dependencies for the target directory
+          if [ -f "${{ inputs.working_directory }}/requirements.txt" ]; then
+            pip install -r ${{ inputs.working_directory }}/requirements.txt || true
+          fi
+          
+          # Run pytest from the workspace root to ensure coverage.xml contains paths relative to the root,
+          # which is required for SonarCloud to match coverage to sources.
+          PYTHONPATH=${{ inputs.working_directory }} pytest ${{ inputs.working_directory }} --cov=${{ inputs.working_directory }} --cov-report=xml:${{ inputs.working_directory }}/coverage.xml || true
           
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v2
